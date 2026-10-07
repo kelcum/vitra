@@ -53,6 +53,9 @@ pub struct CosmeticsStatus {
     /// The signed-in player's Vitra cape.
     pub cape: Option<VitraCape>,
     pub presets: Vec<Preset>,
+    /// Players in game on Vitra right now, and everyone who has used it (None if unknown).
+    pub online: Option<u64>,
+    pub players: Option<u64>,
 }
 
 /// (account uuid, token, expires at ms)
@@ -177,7 +180,11 @@ pub async fn cosmetics_status(state: State<'_, Arc<AppState>>) -> Result<Cosmeti
             cape = serde_json::from_value(resp.json::<Value>().await?["cape"].take()).ok().flatten();
         }
     }
-    Ok(CosmeticsStatus { cape, presets })
+    let stats = match state.http.get(format!("{API}/v1/stats")).send().await {
+        Ok(r) if r.status().is_success() => r.json::<Value>().await.unwrap_or_default(),
+        _ => Value::Null,
+    };
+    Ok(CosmeticsStatus { cape, presets, online: stats["online"].as_u64(), players: stats["players"].as_u64() })
 }
 
 /// Sets the signed-in player's Vitra cape: a preset, an uploaded image (a PNG of 2:1 cape textures

@@ -2,10 +2,14 @@ import { useEffect, useRef } from "react";
 import * as skinview3d from "skinview3d";
 import type { AnimatedCape } from "./vitraCape";
 
-export type ViewAngle = "front" | "back" | "left" | "right";
+/**
+ * "showcase" looks from behind and a little above, so the cape and the skin's side both show. It sits on the
+ * side the turntable turns from, so a turning model shows its cape first.
+ */
+export type ViewAngle = "front" | "back" | "left" | "right" | "showcase";
 export type AnimationKind = "idle" | "walk" | "run" | "wave" | "crouch" | "none";
 
-const ANGLES: Record<ViewAngle, number> = { front: 0, right: Math.PI / 2, back: Math.PI, left: -Math.PI / 2 };
+const ANGLES: Record<ViewAngle, number> = { front: 0, right: Math.PI / 2, back: Math.PI, left: -Math.PI / 2, showcase: Math.PI * 1.22 };
 
 function makeAnimation(kind: AnimationKind) {
   switch (kind) {
@@ -39,6 +43,8 @@ export function SkinViewer3D({
   viewNonce,
   zoom,
   nameTag,
+  rotateSpeed = 1.4,
+  interactive = true,
 }: {
   skin: string;
   model: "classic" | "slim";
@@ -51,6 +57,9 @@ export function SkinViewer3D({
   viewNonce: number;
   zoom: number;
   nameTag?: string | null;
+  rotateSpeed?: number;
+  /** Off: dragging still turns the model, but the wheel scrolls the page instead of zooming. */
+  interactive?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -130,8 +139,13 @@ export function SkinViewer3D({
     const v = viewerRef.current;
     if (!v) return;
     v.autoRotate = autoRotate;
-    v.autoRotateSpeed = 1.4;
-  }, [autoRotate]);
+    v.autoRotateSpeed = rotateSpeed;
+  }, [autoRotate, rotateSpeed]);
+
+  useEffect(() => {
+    const v = viewerRef.current;
+    if (v) v.controls.enableZoom = interactive;
+  }, [interactive]);
 
   useEffect(() => {
     const v = viewerRef.current;
@@ -149,7 +163,11 @@ export function SkinViewer3D({
     if (!v) return;
     const dist = v.camera.position.length();
     const a = ANGLES[view];
-    v.camera.position.set(Math.sin(a) * dist, 0, Math.cos(a) * dist);
+    const up = view === "showcase" ? 0.22 : 0;
+    const flat = Math.sqrt(1 - up * up) * dist;
+    v.camera.position.set(Math.sin(a) * flat, up * dist, Math.cos(a) * flat);
+    // The turntable spins the wrapper, so undo that too or the angle lands somewhere random.
+    v.playerWrapper.rotation.y = 0;
     v.playerObject.rotation.y = 0;
     v.controls.update();
   }, [view, viewNonce]);

@@ -208,7 +208,7 @@ function Presets({ instance }: { instance: InstanceView }) {
               <li>{p.options.graphicsMode === "0" ? "Fast graphics" : "Fancy graphics"}, {p.options.enableVsync === "true" ? "VSync on" : "uncapped FPS"}</li>
               <li>{modded ? (p.mods === "all" ? "All optimization mods" : "Core optimization mods") : "Video settings only (vanilla)"}</li>
             </ul>
-            <Button variant={active ? "default" : "primary"} loading={busy === p.id} disabled={instance.running} onClick={() => apply(p)}>
+            <Button loading={busy === p.id} disabled={instance.running} onClick={() => apply(p)}>
               {active ? "Re-apply" : "Apply"}
             </Button>
           </motion.div>

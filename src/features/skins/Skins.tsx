@@ -1,6 +1,6 @@
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { motion } from "motion/react";
-import { Check, CloudUpload, Download, ExternalLink, LogIn, MoreHorizontal, Pencil, RotateCw, Search, Shirt, Trash2, Upload, UserRound } from "lucide-react";
+import { AtSign, Check, CloudUpload, Download, ExternalLink, Flame, LogIn, MoreHorizontal, Pencil, RotateCw, Search, Shirt, Trash2, Upload, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { SkinFront } from "../../components/art/PlayerHead";
 import { Button, IconButton } from "../../components/ui/Button";
@@ -13,6 +13,8 @@ import { toast, useAccounts, useActiveAccount, useDialogs, useSelectedInstance, 
 import type { FoundSkin, ProfileView, SavedSkin } from "../../lib/types";
 import { defaultSkin, SkinViewer3D, type AnimationKind, type ViewAngle } from "./SkinViewer3D";
 import type { AnimatedCape } from "./vitraCape";
+import { NameChangeDialog } from "./NameChange";
+import { PopularSkins } from "./PopularSkins";
 import { VitraCapePanel } from "./VitraCapePanel";
 import "./skins.css";
 
@@ -64,7 +66,7 @@ export default function Skins() {
   const [ofPreview, setOfPreview] = useState(false);
   // undefined = not previewing a Vitra cape; null = previewing "no Vitra cape".
   const [vitraPreview, setVitraPreview] = useState<AnimatedCape | null | undefined>(undefined);
-  const [view, setView] = useState<ViewAngle>("front");
+  const [view, setView] = useState<ViewAngle>("showcase");
   const [viewNonce, setViewNonce] = useState(0);
   const [animation, setAnimation] = useState<AnimationKind>("idle");
   const [autoRotate, setAutoRotate] = useState(false);
@@ -73,7 +75,8 @@ export default function Skins() {
   const [busy, setBusy] = useState<string | null>(null);
   const [adding, setAdding] = useState<{ path: string; name: string; model: "classic" | "slim" } | null>(null);
   const [renaming, setRenaming] = useState<SavedSkin | null>(null);
-  const [tab, setTab] = useState<"library" | "find">("library");
+  const [tab, setTab] = useState<"library" | "popular" | "find">("library");
+  const [changingName, setChangingName] = useState(false);
   const fallback = useMemo(() => defaultSkin(accent), [accent]);
 
   const loadSkins = () => api.listSkins().then(setSkins).catch(() => setSkins([]));
@@ -164,6 +167,12 @@ export default function Skins() {
   };
 
   const current = preview ?? { id: null, src: fallback, model: "classic" as const };
+  // Turn the model around when a cape is picked, so you see it.
+  const showCape = () => {
+    setView("showcase");
+    setViewNonce((n) => n + 1);
+    setAutoRotate(false);
+  };
 
   return (
     <div className="page-inner">
@@ -185,7 +194,7 @@ export default function Skins() {
             Save current skin
           </Button>
         )}
-        <Button variant="primary" icon={<Upload />} onClick={pickFile}>
+        <Button icon={<Upload />} onClick={pickFile}>
           Add skin
         </Button>
       </div>
@@ -254,6 +263,14 @@ export default function Skins() {
             <div className="panel-head">
               <UserRound />
               <h2>Account</h2>
+              {profile && (
+                <>
+                  <span className="spacer" />
+                  <Button size="sm" icon={<AtSign />} onClick={() => setChangingName(true)}>
+                    Change name
+                  </Button>
+                </>
+              )}
             </div>
             {!accountsLoaded ? (
               <Skeleton h={40} />
@@ -296,7 +313,7 @@ export default function Skins() {
                         <span className="cape-none">None</span>
                       </button>
                       {profile.capes.map((c) => (
-                        <button key={c.id} className="cape-choice" aria-pressed={!ofPreview && vitraPreview === undefined && capeId === c.id} onClick={() => (setCapeId(c.id), setOfPreview(false), setVitraPreview(undefined))} data-tip={c.alias}>
+                        <button key={c.id} className="cape-choice" aria-pressed={!ofPreview && vitraPreview === undefined && capeId === c.id} onClick={() => (setCapeId(c.id), setOfPreview(false), setVitraPreview(undefined), showCape())} data-tip={c.alias}>
                           {c.dataUrl ? <CapeFront src={c.dataUrl} /> : <span className="cape-none">{c.alias}</span>}
                           {c.active && <span className="cape-active" />}
                         </button>
@@ -316,7 +333,7 @@ export default function Skins() {
                 <OptifineCape
                   cape={ofCape}
                   previewing={ofPreview && vitraPreview === undefined}
-                  onPreview={(v) => (setOfPreview(v), setVitraPreview(undefined))}
+                  onPreview={(v) => (setOfPreview(v), setVitraPreview(undefined), v && showCape())}
                   elytra={elytra}
                   onElytra={setElytra}
                   showElytraToggle={profile.capes.length === 0}
@@ -325,12 +342,12 @@ export default function Skins() {
             )}
           </div>
 
-          <VitraCapePanel previewing={vitraPreview !== undefined} onPreview={(c) => (setVitraPreview(c), setOfPreview(false))} />
+          <VitraCapePanel previewing={vitraPreview !== undefined} onPreview={(c) => (setVitraPreview(c), setOfPreview(false), c && showCape())} />
 
           <div className="glass panel skin-library">
             <div className="panel-head">
-              {tab === "library" ? <Shirt /> : <Search />}
-              <h2>{tab === "library" ? "Library" : "Find skins"}</h2>
+              {tab === "library" ? <Shirt /> : tab === "popular" ? <Flame /> : <Search />}
+              <h2>{tab === "library" ? "Library" : tab === "popular" ? "Popular skins" : "Find skins"}</h2>
               {tab === "library" && (
                 <span className="t-faint" style={{ fontSize: 12 }}>
                   {skins?.length ?? 0} saved
@@ -343,11 +360,25 @@ export default function Skins() {
                 onChange={setTab}
                 options={[
                   { value: "library", label: "Library" },
+                  { value: "popular", label: "Popular" },
                   { value: "find", label: "Find" },
                 ]}
               />
             </div>
-            {tab === "find" ? (
+            {tab === "popular" ? (
+              <PopularSkins
+                previewing={preview?.id === "found" ? preview.src : null}
+                onPreview={(f) => setPreview({ id: "found", src: f.dataUrl, model: f.model })}
+                canApply={!!account?.ownsGame}
+                onSaved={async (saved, applyNow) => {
+                  await loadSkins();
+                  setPreview({ id: saved.id, src: saved.dataUrl, model: saved.model });
+                  if (applyNow) await apply(saved);
+                  else toast.success("Saved to your library", saved.name);
+                  setTab("library");
+                }}
+              />
+            ) : tab === "find" ? (
               <FindSkins
                 previewing={preview?.id === "found" ? preview.src : null}
                 onPreview={(f) => setPreview({ id: "found", src: f.dataUrl, model: f.model })}
@@ -474,6 +505,7 @@ export default function Skins() {
         )}
       </Modal>
       <RenameDialog skin={renaming} onClose={() => setRenaming(null)} onSaved={loadSkins} />
+      <NameChangeDialog open={changingName} current={profile?.name ?? ""} onClose={() => setChangingName(false)} onChanged={setProfile} />
     </div>
   );
 }

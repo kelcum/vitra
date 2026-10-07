@@ -40,6 +40,7 @@ async function route(req, env, ctx, url) {
   if (p === '/v1/ping' && m === 'POST') return ping(env, req, await body(req));
   if (p === '/v1/lookup' && m === 'POST') return json({ players: await lookup(env, (await body(req)).players) });
   if (p === '/v1/presets' && m === 'GET') return presets(env);
+  if (p === '/v1/stats' && m === 'GET') return stats(env);
   if (p === '/v1/me/cape' && m === 'PUT') return setCape(env, await body(req));
   let r;
   if ((r = p.match(/^\/v1\/players\/([0-9a-f]{32})$/)) && m === 'GET') return player(env, r[1]);
@@ -159,6 +160,13 @@ async function player(env, uuid, raw) {
   ).bind(uuid).first();
   const info = r ? { vitra: true, name: r.name, online: Date.now() - r.last_seen < ONLINE_MS, badge: badgeFor(env, r.uuid), cape: r.id ? capeInfo(r) : null } : { vitra: false, cape: null };
   return raw ? info : json(info);
+}
+
+// How many people use Vitra, and how many are in game right now. Counts only, no names.
+async function stats(env) {
+  const r = await env.DB.prepare('SELECT COUNT(*) AS players, COALESCE(SUM(last_seen > ?1), 0) AS online FROM users')
+    .bind(Date.now() - ONLINE_MS).first();
+  return json({ players: r.players, online: r.online }, 200, { 'cache-control': 'public, max-age=30' });
 }
 
 // ── capes ──────────────────────────────────────────────────────────────────

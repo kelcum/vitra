@@ -172,6 +172,7 @@ pub async fn get_profile(state: State<'_, Arc<AppState>>) -> Result<ProfileView>
     let Some(profile) = auth::fetch_profile(&state.http, &token).await? else {
         bail!("This account has no Minecraft profile (it doesn't own Java Edition).");
     };
+    auth::sync_account_name(&state, &profile.id, &profile.name)?;
     Ok(profile_view(&state, profile).await)
 }
 
@@ -226,6 +227,125 @@ pub async fn save_current_skin(state: State<'_, Arc<AppState>>) -> Result<SavedS
     let bytes = net::get_bytes(&state.http, &active.url.replace("http://", "https://")).await?;
     let slim = active.variant.as_deref().map(|v| v.eq_ignore_ascii_case("slim")).unwrap_or(false);
     add_to_library(&state, &bytes, &format!("{}'s skin", account.name), if slim { "slim" } else { "classic" })
+}
+
+// ------------------------------------------------------------------ name changes
+
+/// Mojang allows one name change every 30 days.
+const NAME_CHANGE_DAYS: i64 = 30;
+
+fn valid_new_name(name: &str) -> bool {
+    (3..=16).contains(&name.len()) && valid_player_name(name)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NameChangeInfo {
+    pub allowed: bool,
+    /// When the name last changed (ms), if it ever did.
+    pub changed_at: Option<i64>,
+    /// When the next change is allowed (ms), while it isn't yet.
+    pub next_change_at: Option<i64>,
+}
+
+/// Whether the signed-in account may change its name right now.
+#[tauri::command]
+pub async fn name_change_info(state: State<'_, Arc<AppState>>) -> Result<NameChangeInfo> {
+    let (_, token) = auth::access_token(&state).await?;
+    let resp = state.http.get(format!("{MC_API}/minecraft/profile/namechange")).bearer_auth(&token).send().await?;
+    if !resp.status().is_success() {
+        bail!("Mojang didn't say whether you can change your name ({}).", resp.status());
+    }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Raw {
+        changed_at: Option<String>,
+        name_change_allowed: bool,
+    }
+    let raw: Raw = resp.json().await?;
+    let changed_at = raw.changed_at.and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok()).map(|d| d.timestamp_millis());
+    let next_change_at = if raw.name_change_allowed { None } else { changed_at.map(|c| c + NAME_CHANGE_DAYS * 86_400_000) };
+    Ok(NameChangeInfo { allowed: raw.name_change_allowed, changed_at, next_change_at })
+}
+
+#[derive(Debug, Serialize)]
+pub struct NameStatus {
+    pub name: String,
+    /// "available", "taken", "not_allowed" (blocked by Mojang) or "invalid" (not 3–16 letters,
+    /// numbers or underscores).
+    pub status: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+pub struct NameCheck {
+    pub results: Vec<NameStatus>,
+    /// Mojang stopped answering for a moment (rate limit), so the rest weren't checked.
+    pub limited: bool,
+}
+
+/// `None` when Mojang is rate-limiting.
+async fn name_status(http: &reqwest::Client, token: &str, name: &str) -> Result<Option<&'static str>> {
+    if !valid_new_name(name) {
+        return Ok(Some("invalid"));
+    }
+    let resp = http.get(format!("{MC_API}/minecraft/profile/name/{name}/available")).bearer_auth(token).send().await?;
+    match resp.status().as_u16() {
+        200 => {}
+        429 => return Ok(None),
+        s => bail!("Mojang's name check isn't answering right now ({s})."),
+    }
+    let body: serde_json::Value = resp.json().await?;
+    Ok(Some(match body["status"].as_str() {
+        Some("AVAILABLE") => "available",
+        Some("DUPLICATE") => "taken",
+        _ => "not_allowed",
+    }))
+}
+
+/// Checks names in order, a few at a time, until `want` free ones turn up (or the list ends).
+#[tauri::command]
+pub async fn check_names(state: State<'_, Arc<AppState>>, names: Vec<String>, want: usize) -> Result<NameCheck> {
+    let (_, token) = auth::access_token(&state).await?;
+    let mut results = Vec::new();
+    let mut limited = false;
+    for chunk in names.chunks(4) {
+        let checks = futures_util::future::join_all(chunk.iter().map(|n| name_status(&state.http, &token, n))).await;
+        for (name, status) in chunk.iter().zip(checks) {
+            match status? {
+                Some(status) => results.push(NameStatus { name: name.clone(), status }),
+                None => limited = true,
+            }
+        }
+        if limited || results.iter().filter(|r| r.status == "available").count() >= want.max(1) {
+            break;
+        }
+    }
+    Ok(NameCheck { results, limited })
+}
+
+/// Changes the signed-in account's name. Mojang then locks it for 30 days.
+#[tauri::command]
+pub async fn change_name(state: State<'_, Arc<AppState>>, name: String) -> Result<ProfileView> {
+    let name = name.trim();
+    if !valid_new_name(name) {
+        bail!("Names are 3 to 16 letters, numbers or underscores.");
+    }
+    let (_, token) = auth::access_token(&state).await?;
+    let resp = state.http.put(format!("{MC_API}/minecraft/profile/name/{name}")).bearer_auth(&token).send().await?;
+    let status = resp.status().as_u16();
+    if status != 200 {
+        let body: serde_json::Value = resp.json().await.unwrap_or_default();
+        match (status, body["details"]["status"].as_str()) {
+            (_, Some("DUPLICATE")) => bail!("Someone just took {name}. Pick another one."),
+            (_, Some("NOT_ALLOWED")) | (400, _) => bail!("Mojang doesn't allow the name {name}."),
+            (403, _) => bail!("You can't change your name yet. Mojang allows one change every {NAME_CHANGE_DAYS} days."),
+            (429, _) => bail!("Too many tries in a row. Wait a minute and try again."),
+            (s, _) => bail!("Mojang didn't change your name ({s})."),
+        }
+    }
+    let profile: McProfile = resp.json().await?;
+    auth::sync_account_name(&state, &profile.id, &profile.name)?;
+    Ok(profile_view(&state, profile).await)
 }
 
 // ------------------------------------------------------------------ find skins

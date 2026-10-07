@@ -83,6 +83,7 @@ pub fn run() {
             instances::list_worlds,
             instances::recent_worlds,
             instances::recent_screenshots,
+            instances::instance_covers,
             importer::find_external_instances,
             importer::import_external_instance,
             // servers
@@ -122,6 +123,9 @@ pub fn run() {
             skins::set_cape,
             skins::save_current_skin,
             skins::find_player_skin,
+            skins::name_change_info,
+            skins::check_names,
+            skins::change_name,
             skins::fetch_skin_link,
             skins::save_found_skin,
             optifine::optifine_cape,

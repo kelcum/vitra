@@ -314,9 +314,11 @@
 }
 
 /* ---------------------------------------------------------------- body */
+/* Pages scroll right up to the window edges: a scroller inset from them would clip the panels'
+   shadows into a visible darker box, and slice content off above the bottom edge. */
 .app-body {
   display: flex;
-  padding: 4px 20px 20px;
+  padding: 4px 0 0;
   min-height: 0;
 }
 
@@ -355,16 +357,15 @@
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
-  border-radius: var(--r-xl);
 }
 .page-inner {
   display: flex;
   flex-direction: column;
   gap: 18px;
   width: 100%;
-  max-width: 1440px;
+  max-width: 1488px;
   margin: 0 auto;
-  padding: 4px 4px 28px;
+  padding: 4px 24px 40px;
   min-height: 100%;
 }
 .page-head {

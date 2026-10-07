@@ -1,6 +1,6 @@
 .instance-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 14px;
 }
 .instance-card {
@@ -21,19 +21,72 @@
 .instance-card-main {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding: 18px 18px 12px;
+  align-items: stretch;
+  padding: 0;
   text-align: left;
   flex: 1;
   min-width: 0;
 }
-.instance-card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+
+/* ---------------------------------------------------------------- cover */
+.instance-cover {
+  position: relative;
+  height: 128px;
+  overflow: hidden;
+  border-radius: calc(var(--r-xl) - 1px) calc(var(--r-xl) - 1px) 0 0;
+  background: rgb(var(--tint) / 0.5);
+}
+.instance-cover::after {
+  /* Melts the picture into the card. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(0 0 0 / 0) 35%, rgb(var(--tint) / 0.7));
+  pointer-events: none;
+}
+.instance-cover-img {
+  display: block;
   width: 100%;
-  margin-bottom: 10px;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--d-4) var(--ease-out);
+}
+.instance-card:hover .instance-cover-img--screenshot {
+  transform: scale(1.05);
+}
+.instance-cover-img--world {
+  filter: blur(14px) saturate(1.3);
+  transform: scale(1.5);
+}
+.instance-cover-art {
+  height: 100%;
+  background:
+    radial-gradient(90% 120% at 15% 0%, rgb(var(--accent-rgb) / 0.45), transparent 60%),
+    radial-gradient(80% 120% at 100% 100%, rgb(140 92 255 / 0.35), transparent 60%),
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.03) 0 16px, transparent 16px 32px),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.03) 0 16px, transparent 16px 32px);
+}
+.instance-cover-chip {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+}
+
+.instance-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 18px 14px;
+}
+.instance-card-icon {
+  position: relative;
+  z-index: 1;
+  width: fit-content;
+  margin: -30px 0 8px;
+  border-radius: 16px;
+  box-shadow: 0 8px 20px -6px rgb(0 0 0 / 0.55);
 }
 .instance-card-name {
   max-width: 100%;
@@ -66,7 +119,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-height: 196px;
+  min-height: 260px;
   border: 1px solid var(--line-strong);
   background: rgb(255 255 255 / 0.025);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);

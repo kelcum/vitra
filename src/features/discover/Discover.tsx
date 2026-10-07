@@ -11,6 +11,7 @@ import { api, errorMessage } from "../../lib/api";
 import { useContentVersion } from "../../lib/events";
 import { formatCount, LOADER_LABEL, relativeTime } from "../../lib/format";
 import { toast, useDialogs, useInstances, useNav, useSelectedInstance, useTasks } from "../../lib/store";
+import { useWheelScrollX } from "../../lib/wheel";
 import type { InstanceView, MrProjectDetail, MrVersion, ProjectType, SearchHit } from "../../lib/types";
 import "../instance/instance.css";
 import "./discover.css";
@@ -61,6 +62,7 @@ export default function Discover({ initialType }: { initialType?: string }) {
   const [detail, setDetail] = useState<SearchHit | null>(null);
   const debounced = useDebounced(query, 300);
   const sentinel = useRef<HTMLDivElement>(null);
+  const catsRef = useWheelScrollX<HTMLDivElement>();
   const contentVersion = useContentVersion((s) => s.v);
   const requestId = useRef(0);
 
@@ -172,7 +174,7 @@ export default function Discover({ initialType }: { initialType?: string }) {
           )}
         </div>
         {typeCategories.length > 0 && (
-          <div className="discover-cats">
+          <div className="discover-cats" ref={catsRef}>
             {typeCategories.map((c) => (
               <button
                 key={c}
@@ -319,7 +321,7 @@ function InstallButton({
   return (
     <Button
       size={size}
-      variant="primary"
+      variant={size === "md" ? "primary" : "default"}
       icon={<Download />}
       loading={busy || working}
       disabled={type !== "modpack" && (!target || (type === "mod" && target.loader === "vanilla"))}

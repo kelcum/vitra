@@ -14,7 +14,7 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { InstanceIcon } from "../../components/art/PixelIcon";
 import { PlayButton } from "../../components/PlayButton";
 import { Button, IconButton } from "../../components/ui/Button";
@@ -27,6 +27,7 @@ import { perfModsFor } from "../../lib/presets";
 import {
   activeTaskFor,
   toast,
+  useActiveAccount,
   useDialogs,
   useInstances,
   useNav,
@@ -34,8 +35,14 @@ import {
   useSettings,
   useTasks,
 } from "../../lib/store";
-import type { InstanceView, PatchNote, TextBlock, WorldInfo } from "../../lib/types";
+import type { CosmeticsStatus, InstanceView, PatchNote, TextBlock, VitraCape, WorldInfo } from "../../lib/types";
+import { useWheelScrollX } from "../../lib/wheel";
+import { CapeThumb } from "../skins/VitraCapePanel";
+import { loadVitraCape, type AnimatedCape } from "../skins/vitraCape";
 import "./home.css";
+
+// The 3D model pulls in the 3D engine, so it loads after the rest of Home.
+const HeroPlayer = lazy(() => import("./HeroPlayer"));
 
 const stagger = {
   hidden: {},
@@ -51,17 +58,24 @@ export function Home() {
   const loaded = useInstances((s) => s.loaded);
   const selected = useSelectedInstance();
   const showNews = useSettings((s) => s.settings?.showNews ?? true);
+  const vitra = useVitraStatus();
 
   return (
     <motion.div className="page-inner home" variants={stagger} initial="hidden" animate="show">
-      {loaded && instances.length === 0 ? <Welcome /> : selected ? <Hero instance={selected} /> : <HeroSkeleton />}
+      {loaded && instances.length === 0 ? (
+        <Welcome />
+      ) : selected ? (
+        <Hero instance={selected} vitraCape={vitra === "error" ? null : (vitra?.cape ?? null)} />
+      ) : (
+        <HeroSkeleton />
+      )}
       {instances.length > 0 && (
         <motion.div className="home-grid" variants={stagger}>
           <motion.div variants={rise} className="glass panel home-worlds">
             <RecentWorlds />
           </motion.div>
           <motion.div variants={rise} className="glass panel">
-            <Status />
+            <VitraCard status={vitra} />
           </motion.div>
           <motion.div variants={rise} className="glass panel">
             <QuickAccess />
@@ -89,7 +103,7 @@ function HeroSkeleton() {
   );
 }
 
-function Hero({ instance }: { instance: InstanceView }) {
+function Hero({ instance, vitraCape }: { instance: InstanceView; vitraCape: VitraCape | null }) {
   const instances = useInstances((s) => s.instances);
   const update = useSettings((s) => s.update);
   const navigate = useNav((s) => s.navigate);
@@ -103,9 +117,12 @@ function Hero({ instance }: { instance: InstanceView }) {
   const status = running ? "Running" : task ? task.title : instance.installedVersion ? "Ready to play" : "Not installed yet";
 
   return (
-    <motion.section className="hero" variants={rise}>
+    <motion.section className="hero hero--with-player" variants={rise}>
+      <Suspense fallback={null}>
+        <HeroPlayer vitraCape={vitraCape} />
+      </Suspense>
       <div className="hero-status">
-        <span className={`hero-dot ${running ? "hero-dot--live" : task ? "hero-dot--busy" : ""}`} />
+        <span className={`hero-dot ${running ? "hero-dot--live" : task ? "hero-dot--busy" : instance.installedVersion ? "hero-dot--ready" : ""}`} />
         {status}
       </div>
       <button ref={ref} className="hero-switch" onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}>
@@ -339,59 +356,83 @@ function RecentWorlds() {
   );
 }
 
-function Status() {
-  const instances = useInstances((s) => s.instances);
-  const tasks = useTasks((s) => s.tasks);
-  const running = Object.values(tasks).filter((t) => t.state === "running");
-  const totalPlay = instances.reduce((a, i) => a + i.playTimeSecs, 0);
-  const lastPlayed = Math.max(0, ...instances.map((i) => i.lastPlayed ?? 0));
-  const notInstalled = instances.filter((i) => !i.installedVersion).length;
+// Vitra's numbers change slowly; one request a minute is plenty, however often Home opens.
+const STATUS_TTL_MS = 60 * 1000;
+let statusCache: { key: string; at: number; value: CosmeticsStatus } | null = null;
+
+/** Your Vitra cape plus how many people play on Vitra. undefined while loading. */
+function useVitraStatus(): CosmeticsStatus | "error" | undefined {
+  const account = useActiveAccount();
+  const key = account?.uuid ?? "";
+  const fresh = statusCache?.key === key && Date.now() - statusCache.at < STATUS_TTL_MS ? statusCache.value : undefined;
+  const [status, setStatus] = useState<CosmeticsStatus | "error" | undefined>(fresh);
+  useEffect(() => {
+    if (fresh) return setStatus(fresh);
+    let live = true;
+    api
+      .cosmeticsStatus()
+      .then((s) => {
+        statusCache = { key, at: Date.now(), value: s };
+        if (live) setStatus(s);
+      })
+      .catch(() => live && setStatus("error"));
+    return () => {
+      live = false;
+    };
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  return status;
+}
+
+function VitraCard({ status }: { status: CosmeticsStatus | "error" | undefined }) {
+  const navigate = useNav((s) => s.navigate);
+  const account = useActiveAccount();
+  const [art, setArt] = useState<AnimatedCape | null>(null);
+  const data = status === "error" ? undefined : status;
+  const cape = data?.cape ?? null;
+  const preset = data?.presets.find((p) => p.cape.id === cape?.id);
+
+  useEffect(() => {
+    setArt(null);
+    // No cape yet: show off a free one instead.
+    const show = cape ?? data?.presets[0]?.cape;
+    if (show) loadVitraCape(show).then(setArt).catch(() => {});
+  }, [cape?.id, data?.presets[0]?.cape.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const count = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 
   return (
     <>
       <div className="panel-head">
-        <Gauge />
-        <h2>Status</h2>
+        <Sparkles />
+        <h2>Vitra</h2>
+        {!!data?.online && <span className="vitra-live">{data.online} in game</span>}
       </div>
-      {running.length > 0 ? (
-        <div className="col" style={{ gap: 12 }}>
-          {running.slice(0, 3).map((t) => (
-            <div key={t.id} className="col" style={{ gap: 6 }}>
-              <div className="row" style={{ fontSize: 13 }}>
-                <span className="grow truncate" style={{ fontWeight: 600 }}>
-                  {t.title}
-                </span>
-                <span className="t-faint t-num">{t.progress != null ? `${Math.round(t.progress * 100)}%` : ""}</span>
-              </div>
-              <ProgressBar value={t.progress} thin />
-              <span className="t-faint truncate" style={{ fontSize: 12 }}>
-                {t.stage}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
+      <div className="col" style={{ gap: 10, flex: 1 }}>
         <div className="stat-grid">
           <div className="stat">
-            <div className="stat-value">{instances.length}</div>
-            <div className="stat-label">Instances</div>
+            <div className="stat-value">{data ? count(data.online) : <Skeleton w={28} h={18} />}</div>
+            <div className="stat-label">Playing on Vitra now</div>
           </div>
           <div className="stat">
-            <div className="stat-value">{formatDuration(totalPlay)}</div>
-            <div className="stat-label">Total play time</div>
-          </div>
-          <div className="stat">
-            <div className="stat-value">{lastPlayed ? relativeTime(lastPlayed, true) : "—"}</div>
-            <div className="stat-label">Last session</div>
-          </div>
-          <div className="stat">
-            <div className="stat-value" style={{ color: notInstalled ? "var(--warning)" : "var(--success)" }}>
-              {notInstalled ? `${notInstalled} pending` : "All set"}
-            </div>
-            <div className="stat-label">Installations</div>
+            <div className="stat-value">{data ? count(data.players) : <Skeleton w={28} h={18} />}</div>
+            <div className="stat-label">Vitra players</div>
           </div>
         </div>
-      )}
+        <button className="vitra-cape-row" onClick={() => navigate("skins")}>
+          <span className="vitra-cape-art">
+            <CapeThumb cape={art} />
+          </span>
+          <span className="grow" style={{ minWidth: 0 }}>
+            <span className="truncate" style={{ display: "block", fontWeight: 650 }}>
+              {status === "error" ? "Cape server unreachable" : cape ? (preset?.name ?? "Your own cape") : "Free animated capes"}
+            </span>
+            <span className="t-faint truncate" style={{ display: "block", fontSize: 12 }}>
+              {cape ? "Your Vitra cape, seen by everyone on Vitra" : account ? "Pick one, or upload a GIF" : "Sign in to wear one in game"}
+            </span>
+          </span>
+          <span className="vitra-cape-go">{cape ? "Change" : "Pick one"}</span>
+        </button>
+      </div>
     </>
   );
 }
@@ -431,6 +472,7 @@ function News() {
   const [notes, setNotes] = useState<PatchNote[] | null>(null);
   const [error, setError] = useState(false);
   const [openNote, setOpenNote] = useState<PatchNote | null>(null);
+  const rowRef = useWheelScrollX<HTMLDivElement>();
   useEffect(() => {
     api
       .patchNotes(8)
@@ -449,7 +491,7 @@ function News() {
           Official Java Edition patch notes
         </span>
       </div>
-      <div className="news-row">
+      <div className="news-row" ref={rowRef}>
         {notes === null
           ? [0, 1, 2, 3].map((i) => <Skeleton key={i} w={260} h={190} r={20} style={{ flex: "none" }} />)
           : notes.map((n) => (
