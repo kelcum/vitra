@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2140"/>
+      <stop offset="1" stop-color="#080a14"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d8f3ff"/>
+      <stop offset="1" stop-color="#7cc7ff"/>
+    </linearGradient>
+    <linearGradient id="left" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5b8cff"/>
+      <stop offset="1" stop-color="#3a3fd8"/>
+    </linearGradient>
+    <linearGradient id="right" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8a6dff"/>
+      <stop offset="1" stop-color="#4b2fc4"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.5">
+      <stop offset="0" stop-color="#7aa8ff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#7aa8ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="220" fill="url(#bg)"/>
+  <rect x="32" y="32" width="960" height="960" rx="220" fill="url(#glow)"/>
+  <rect x="33" y="33" width="958" height="958" rx="219" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="4"/>
+  <g transform="translate(512 528)">
+    <polygon points="0,-300 260,-150 0,0 -260,-150" fill="url(#top)" opacity="0.96"/>
+    <polygon points="-260,-150 0,0 0,300 -260,150" fill="url(#left)" opacity="0.92"/>
+    <polygon points="260,-150 0,0 0,300 260,150" fill="url(#right)" opacity="0.92"/>
+    <polyline points="-260,-150 0,0 260,-150" fill="none" stroke="#ffffff" stroke-opacity="0.75" stroke-width="10" stroke-linejoin="round"/>
+    <line x1="0" y1="0" x2="0" y2="300" stroke="#ffffff" stroke-opacity="0.35" stroke-width="8"/>
+    <polygon points="-150,-210 -40,-146 -150,-82 -260,-146" fill="#ffffff" opacity="0.18"/>
+  </g>
+</svg>

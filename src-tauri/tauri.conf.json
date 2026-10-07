@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Vitra",
+  "version": "0.1.2",
+  "identifier": "app.vitra.launcher",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Vitra",
+        "width": 1320,
+        "height": 820,
+        "minWidth": 1000,
+        "minHeight": 660,
+        "center": true,
+        "decorations": false,
+        "resizable": true,
+        "backgroundColor": "#07080d",
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: asset: http://asset.localhost https://cdn.modrinth.com https://launchercontent.mojang.com https://textures.minecraft.net https://api.xan.gripe; connect-src 'self' ipc: http://ipc.localhost; worker-src 'self' blob:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/**",
+          "$APPLOCALDATA/**"
+        ]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "createUpdaterArtifacts": true,
+    "resources": [
+      "resources/mods/*"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJEMzIxNDA0ODFBNDZBMzUKUldRMWFxU0JCQlF5TFdIREhKcnVvb3A0U0pJQUZvQ2o1NTVIYi82VWJKZC9xTWdCUW1sZWpncTYK",
+      "endpoints": [
+        "https://xan.gripe/vitra/updates/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

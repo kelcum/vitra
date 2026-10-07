@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitra Launcher</title>
+<meta name="description" content="Vitra is a fast, private desktop launcher for Minecraft: Java Edition with a liquid-glass interface: every mod loader, Modrinth built in, live server status, performance presets and 3D skins.">
+<meta name="theme-color" content="#07060c">
+<link rel="canonical" href="https://xan.gripe/vitra/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://xan.gripe/vitra/">
+<meta property="og:title" content="Vitra Launcher">
+<meta property="og:description" content="A liquid-glass launcher for Minecraft: Java Edition.">
+<meta property="og:image" content="https://xan.gripe/vitra/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/vitra/favicon.png">
+<link rel="apple-touch-icon" href="/vitra/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..900&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/vitra/assets/site.css">
+<script>document.documentElement.classList.add("js")</script>
+<link rel="preload" as="image" href="/vitra/shots/home.webp" imagesrcset="/vitra/shots/home-1x.webp 1320w, /vitra/shots/home.webp 2640w" imagesizes="(max-width: 1192px) 100vw, 1160px">
+</head>
+<body>
+<div class="backdrop" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="nav glass">
+  <a class="brand" href="/vitra/"><img src="/vitra/icon.png" alt="" width="28" height="28">Vitra</a>
+  <nav class="nav-links" aria-label="Sections">
+    <a href="#features">Features</a>
+    <a href="#servers">Servers</a>
+    <a href="#tour">Tour</a>
+    <a href="#signin">Sign-in &amp; privacy</a>
+  </nav>
+  <a class="btn btn-primary" href="#download">Download</a>
+</header>
+
+<main>
+  <!-- ============================================================ hero -->
+  <section class="hero wrap">
+    <span class="pill glass reveal"><b>Free</b><span>Minecraft: Java Edition<span class="hide-sm"> · Windows 10 &amp; 11</span></span></span>
+    <h1 class="reveal"><span class="gradient-text">Minecraft, launched beautifully.</span></h1>
+    <p class="lead reveal">Vitra is a fast, private launcher with a liquid-glass interface. Install any version, manage mods and modpacks, jump into the biggest servers and tune performance, all from one place.</p>
+    <div class="cta reveal">
+      <a class="btn btn-primary" href="/vitra/download/Vitra_0.1.2_x64-setup.exe" download>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        Download for Windows
+      </a>
+      <a class="btn btn-ghost" href="#tour">Take the tour</a>
+    </div>
+    <p class="cta-meta reveal">Version 0.1.2 · 5.1 MB · Windows 10 &amp; 11 (64-bit) · updates itself</p>
+    <div class="hero-shot reveal">
+      <div class="frame glass">
+        <img src="/vitra/shots/home.webp" srcset="/vitra/shots/home-1x.webp 1320w, /vitra/shots/home.webp 2640w" sizes="(max-width: 1192px) 100vw, 1160px" width="1320" height="820" fetchpriority="high" alt="Vitra's home screen: the selected instance with a large Play button, recent worlds, play time and Minecraft update news, over a softly blurred screenshot background.">
+      </div>
+    </div>
+    <div class="loaders reveal" aria-label="Supported game types">
+      <span>Vanilla</span><span>Fabric</span><span>Quilt</span><span>Forge</span><span>NeoForge</span>
+    </div>
+  </section>
+
+  <!-- ============================================================ stats -->
+  <div class="wrap">
+    <div class="stats glass reveal">
+      <div class="stat"><strong>4 MB</strong><span>installer, native Rust core</span></div>
+      <div class="stat"><strong>Every file</strong><span>checked against Mojang's published checksums</span></div>
+      <div class="stat"><strong>0</strong><span>passwords seen or stored</span></div>
+      <div class="stat"><strong>No tracking</strong><span>no analytics, ads or telemetry</span></div>
+    </div>
+  </div>
+
+  <!-- ============================================================ features -->
+  <section id="features" class="wrap">
+    <p class="eyebrow reveal">Everything in one place</p>
+    <h2 class="reveal">Built for how you<br><span class="gradient-text">actually play.</span></h2>
+    <div class="bento">
+      <article class="card glass span-4 wide reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div>
+        <h3>Every loader, installed the official way</h3>
+        <p>Vanilla, Fabric, Quilt, Forge and NeoForge, straight from each project's own servers. Forge and NeoForge run their real installers. Each instance keeps its own mods, settings, worlds, Java and memory.</p>
+        <div class="tags"><span>Vanilla</span><span>Fabric</span><span>Quilt</span><span>Forge</span><span>NeoForge</span><span>Snapshots</span></div>
+      </article>
+      <article class="card glass span-2 reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M6 2v2"/><path d="M10 2v2"/><path d="M14 2v2"/></svg></div>
+        <h3>The right Java, automatically</h3>
+        <p>Mojang's own runtime for every version, from Java 8 to 25. Nothing to install by hand.</p>
+      </article>
+      <article class="card glass span-2 reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg></div>
+        <h3>Modrinth built in</h3>
+        <p>Search mods, modpacks, resource packs and shaders. Dependencies resolve themselves and updates are one click.</p>
+      </article>
+      <article class="card glass span-2 reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M8 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/></svg></div>
+        <h3>Bring your setup</h3>
+        <p>Import from Prism, MultiMC, CurseForge, Modrinth App, ATLauncher, GDLauncher or the Minecraft Launcher, mods and worlds included. Originals stay untouched.</p>
+      </article>
+      <article class="card glass span-2 reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg></div>
+        <h3>Honest performance</h3>
+        <p>Presets that change real game settings and add proven optimization mods. No fake FPS promises, and never all of your RAM.</p>
+      </article>
+      <article class="card glass span-3 reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg></div>
+        <h3>Skins &amp; free capes</h3>
+        <p>Find any player's skin and see it in 3D. Wear a free Vitra cape, animated ones too, or turn any GIF into one. Other Vitra players see it, with a Vitra badge next to your name.</p>
+      </article>
+      <article class="card glass span-3 reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg></div>
+        <h3>Make it yours</h3>
+        <p>Your latest screenshot becomes a soft, blurred backdrop, and the accent can follow its colors. Glass, blur, motion and scale are all yours to tune.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============================================================ servers -->
+  <section id="servers" class="wrap">
+    <div class="spotlight">
+      <div class="spot-text reveal">
+        <p class="eyebrow">Servers</p>
+        <h2>The biggest servers,<br><span class="gradient-text">live.</span></h2>
+        <p class="lead">Vitra asks each server for its status the same way the game's multiplayer screen does, so what you see is what's really there right now.</p>
+        <ul>
+          <li><b>Live player counts</b>, ping, version and the server's own colored message</li>
+          <li><b>One click to join</b> with the instance of your choice</li>
+          <li><b>Add your own</b>, and hide the ones you don't care about</li>
+        </ul>
+      </div>
+      <div class="shot glass reveal">
+        <img src="/vitra/shots/servers-1x.webp" srcset="/vitra/shots/servers-1x.webp 1320w, /vitra/shots/servers.webp 2640w" sizes="(max-width: 960px) 100vw, 680px" width="1320" height="820" loading="lazy" alt="The Servers page: Hypixel featured with its live player count, followed by cards for MCC Island, CubeCraft, Wynncraft and more, each with players, ping and a Play button.">
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ mods -->
+  <section class="wrap">
+    <div class="spotlight flip">
+      <div class="shot glass reveal">
+        <img src="/vitra/shots/instance-1x.webp" srcset="/vitra/shots/instance-1x.webp 1320w, /vitra/shots/instance.webp 2640w" sizes="(max-width: 960px) 100vw, 680px" width="1320" height="820" loading="lazy" alt="An instance page listing installed mods with icons, versions and on/off switches, plus tabs for resource packs, shaders, worlds, logs and settings.">
+      </div>
+      <div class="spot-text reveal">
+        <p class="eyebrow">Instances</p>
+        <h2>Your mods,<br><span class="gradient-text">under control.</span></h2>
+        <p class="lead">Every instance has its own home for mods, resource packs, shaders and worlds.</p>
+        <ul>
+          <li><b>Switch mods on and off</b> without deleting anything</li>
+          <li><b>Check for updates</b> across the whole list at once</li>
+          <li><b>Live logs</b> and plain-language crash explanations</li>
+          <li><b>Back up, duplicate or export</b> as a Modrinth modpack</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ tour -->
+  <section id="tour" class="wrap center">
+    <p class="eyebrow reveal">Tour</p>
+    <h2 class="reveal">Every screen,<br><span class="gradient-text">made of glass.</span></h2>
+    <div class="tour-tabs glass reveal" role="tablist" aria-label="Screens">
+      <button role="tab" aria-selected="true" data-caption="Discover: browse Modrinth mods, modpacks, resource packs and shaders, filtered to what works with your instance.">Discover</button>
+      <button role="tab" aria-selected="false" data-caption="Performance: your hardware at a glance, three tuned presets, render distance and optimization mods for each instance.">Performance</button>
+      <button role="tab" aria-selected="false" data-caption="Skins: look up any player's skin by name, preview it in 3D, then save it or put it on your account.">Skins</button>
+      <button role="tab" aria-selected="false" data-caption="Settings: theme, accent, glass intensity, blur, background and motion, all saved automatically.">Settings</button>
+    </div>
+    <div class="tour-stage glass reveal">
+      <div class="slides">
+        <img class="on" src="/vitra/shots/discover-1x.webp" srcset="/vitra/shots/discover-1x.webp 1320w, /vitra/shots/discover.webp 2640w" sizes="(max-width: 1192px) 100vw, 1140px" width="1320" height="820" loading="lazy" alt="Discover page with Modrinth search, category filters and mod cards.">
+        <img src="/vitra/shots/performance-1x.webp" srcset="/vitra/shots/performance-1x.webp 1320w, /vitra/shots/performance.webp 2640w" sizes="(max-width: 1192px) 100vw, 1140px" width="1320" height="820" loading="lazy" alt="Performance page with hardware info, three presets and fine-tuning sliders.">
+        <img src="/vitra/shots/skins-1x.webp" srcset="/vitra/shots/skins-1x.webp 1320w, /vitra/shots/skins.webp 2640w" sizes="(max-width: 1192px) 100vw, 1140px" width="1320" height="820" loading="lazy" alt="Skins page showing Technoblade's skin found by name on the 3D model, with Save and Save &amp; apply buttons.">
+        <img src="/vitra/shots/settings-1x.webp" srcset="/vitra/shots/settings-1x.webp 1320w, /vitra/shots/settings.webp 2640w" sizes="(max-width: 1192px) 100vw, 1140px" width="1320" height="820" loading="lazy" alt="Appearance settings with theme, accent colors and liquid glass sliders.">
+      </div>
+    </div>
+    <p class="tour-caption" aria-live="polite">Discover: browse Modrinth mods, modpacks, resource packs and shaders, filtered to what works with your instance.</p>
+  </section>
+
+  <!-- ============================================================ download -->
+  <section id="download" class="wrap">
+    <div class="download glass reveal">
+      <img class="download-icon" src="/vitra/icon.png" alt="" width="96" height="96">
+      <div class="download-text">
+        <p class="eyebrow">Download</p>
+        <h2>Get <span class="gradient-text">Vitra.</span></h2>
+        <p class="lead">Free for Windows 10 and 11. Sign in with the Microsoft account that owns Minecraft: Java Edition and you're set.</p>
+        <div class="cta" style="justify-content:flex-start">
+          <a class="btn btn-primary" href="/vitra/download/Vitra_0.1.2_x64-setup.exe" download>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Download Vitra 0.1.2
+          </a>
+        </div>
+        <ul class="download-facts">
+          <li><b>5.1 MB</b> installer, no admin rights needed</li>
+          <li><b>Updates itself</b>: new versions show up inside Vitra, signed so only real ones install. Your instances, worlds and settings stay</li>
+          <li><b>SHA-256</b> <code>f9c56f160e6eb3a798c7d042df16b3aa6ccdfea33aabc187a3a787e7cc9fcf8c</code></li>
+        </ul>
+        <p class="download-note">Vitra is new and not code-signed yet, so Windows may show <b>"Windows protected your PC"</b>. Choose <b>More info</b>, then <b>Run anyway</b>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ sign-in -->
+  <section id="signin" class="wrap">
+    <p class="eyebrow reveal">Microsoft account sign-in</p>
+    <h2 class="reveal">Your account stays<br><span class="gradient-text">yours.</span></h2>
+    <p class="lead reveal">Vitra uses the official Microsoft sign-in, so players can launch the copy of Minecraft they own. You sign in on Microsoft's own website, never inside Vitra.</p>
+    <div class="signin-grid">
+      <ol class="steps glass reveal">
+        <li><b>Sign in on Microsoft's website</b>OAuth device code flow at <code>login.microsoftonline.com/consumers</code>, scope <code>XboxLive.signin offline_access</code>.</li>
+        <li><b>Xbox Live</b>User authentication, then XSTS for <code>rp://api.minecraftservices.com/</code>.</li>
+        <li><b>Minecraft services</b><code>/authentication/login_with_xbox</code> exchanges the Xbox token for a Minecraft access token.</li>
+        <li><b>Ownership &amp; profile</b><code>/entitlements/mcstore</code> and <code>/minecraft/profile</code> confirm the game is owned and read the player's name and UUID.</li>
+        <li><b>Skins and capes</b>The profile skin and cape endpoints, only when the player changes their own skin or cape.</li>
+      </ol>
+      <div class="never glass reveal">
+        <h3>What Vitra never does</h3>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>See, ask for or store your Microsoft password.</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>Send your account data anywhere except Microsoft and Mojang. Tokens stay on your PC, encrypted with a key in Windows Credential Manager.</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>Track you. There are no analytics, ads or telemetry.</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>Unlock the game for accounts that don't own it. Those can only start the official demo.</li>
+        </ul>
+        <div class="links"><a href="/vitra/privacy/">Privacy statement →</a><a href="/vitra/terms/">Terms of use →</a></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="/vitra/"><img src="/vitra/icon.png" alt="" width="28" height="28">Vitra</a>
+    <span>A personal, non-commercial project.</span>
+    <nav aria-label="Legal"><a href="/vitra/privacy/">Privacy</a><a href="/vitra/terms/">Terms</a></nav>
+    <p class="disclaimer">NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.</p>
+  </div>
+</footer>
+
+<script src="/vitra/assets/site.js" defer></script>
+</body>
+</html>

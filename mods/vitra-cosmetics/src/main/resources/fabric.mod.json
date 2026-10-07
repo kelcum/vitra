@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "vitra-cosmetics",
+  "version": "${version}",
+  "name": "Vitra Cosmetics",
+  "description": "Shows the Vitra badge next to players using Vitra, and their Vitra capes. Added by the Vitra launcher.",
+  "authors": ["k3"],
+  "contact": { "homepage": "https://xan.gripe/vitra/" },
+  "license": "All-Rights-Reserved",
+  "icon": "assets/vitra/icon.png",
+  "environment": "client",
+  "entrypoints": { "client": ["app.vitra.cosmetics.VitraCosmetics"] },
+  "mixins": ["vitra-cosmetics.mixins.json"],
+  "depends": { "fabricloader": ">=0.18.0", "minecraft": "~26.3", "java": ">=25" },
+  "recommends": { "fabric-api": "*" }
+}

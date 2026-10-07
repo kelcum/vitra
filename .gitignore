@@ -1,0 +1,16 @@
+# dependencies and build output
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+mods/*/build/
+*.log
+
+# installers, signatures and release notes live outside the repo
+release/
+
+# local tooling
+.claude/
+services/*/.wrangler/
+services/*/node_modules/
+.dev.vars

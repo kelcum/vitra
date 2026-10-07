@@ -1,0 +1,120 @@
+/* ------------------------------------------------------------------
+   Vitra design tokens. Every color, radius, shadow, blur and timing in
+   the app comes from here. Runtime-tunable values (accent, glass,
+   blur, motion, scale) are written onto :root by applyAppearance().
+   ------------------------------------------------------------------ */
+
+:root {
+  /* Runtime (overridden from settings) */
+  --accent: #7c9cff;
+  --accent-rgb: 124 156 255;
+  --accent-contrast: #0b1020;
+  --accent-text: #9db5ff;
+  --glass-alpha: 0.45;
+  --glass-blur: 28px;
+  --glass-sat: 156%;
+  --glass-hl: 0.17;
+  --glass-edge: 0.11;
+  --motion-scale: 1;
+  --bg-dim: 0.35;
+
+  /* Type */
+  --font: "Inter Variable", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace;
+  --fs-xs: 11.5px;
+  --fs-sm: 12.5px;
+  --fs-md: 13.5px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+  --fs-2xl: 24px;
+  --fs-3xl: 34px;
+  --fs-hero: 46px;
+
+  /* Space (4px grid) */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+
+  /* Radius */
+  --r-xs: 7px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+
+  /* Motion — durations scale with the user's motion setting */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --d-1: calc(180ms * var(--motion-scale));
+  --d-2: calc(320ms * var(--motion-scale));
+  --d-3: calc(480ms * var(--motion-scale));
+  --d-4: calc(760ms * var(--motion-scale));
+
+  /* Layout */
+  --topbar-h: 68px;
+}
+
+/* ---------------------------------------------------------------- dark */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #05060b;
+  --tint: 14 16 28;
+  --text-1: #f2f4fa;
+  --text-2: rgb(222 228 248 / 0.68);
+  --text-3: rgb(222 228 248 / 0.44);
+  --line: rgb(255 255 255 / 0.075);
+  --line-strong: rgb(255 255 255 / 0.14);
+  --fill-1: rgb(255 255 255 / 0.04);
+  --fill-2: rgb(255 255 255 / 0.07);
+  --fill-3: rgb(255 255 255 / 0.11);
+  --fill-press: rgb(255 255 255 / 0.15);
+  --shadow-1: 0 1px 1px rgb(0 0 0 / 0.25), 0 6px 18px -6px rgb(0 0 0 / 0.45);
+  --shadow-2: 0 2px 4px rgb(0 0 0 / 0.25), 0 18px 48px -12px rgb(0 0 0 / 0.6);
+  --shadow-3: 0 4px 10px rgb(0 0 0 / 0.3), 0 32px 80px -16px rgb(0 0 0 / 0.75);
+  --success: #5ee59a;
+  --success-rgb: 94 229 154;
+  --warning: #f7c35c;
+  --warning-rgb: 247 195 92;
+  --danger: #ff7a7a;
+  --danger-rgb: 255 122 122;
+  --scrim: rgb(3 4 8 / 0.55);
+  --skeleton: rgb(255 255 255 / 0.06);
+  --skeleton-shine: rgb(255 255 255 / 0.1);
+}
+
+/* ---------------------------------------------------------------- light */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #e7ebf3;
+  --tint: 250 251 254;
+  --text-1: #0c1120;
+  --text-2: rgb(16 22 40 / 0.68);
+  --text-3: rgb(16 22 40 / 0.45);
+  --line: rgb(12 20 40 / 0.08);
+  --line-strong: rgb(12 20 40 / 0.15);
+  --fill-1: rgb(12 20 40 / 0.035);
+  --fill-2: rgb(12 20 40 / 0.06);
+  --fill-3: rgb(12 20 40 / 0.09);
+  --fill-press: rgb(12 20 40 / 0.13);
+  --shadow-1: 0 1px 1px rgb(20 30 60 / 0.06), 0 6px 18px -6px rgb(20 30 60 / 0.18);
+  --shadow-2: 0 2px 4px rgb(20 30 60 / 0.06), 0 18px 48px -12px rgb(20 30 60 / 0.25);
+  --shadow-3: 0 4px 10px rgb(20 30 60 / 0.08), 0 32px 80px -16px rgb(20 30 60 / 0.35);
+  --success: #12935a;
+  --success-rgb: 18 147 90;
+  --warning: #b7791f;
+  --warning-rgb: 183 121 31;
+  --danger: #d43c3c;
+  --danger-rgb: 212 60 60;
+  --scrim: rgb(220 226 238 / 0.55);
+  --skeleton: rgb(12 20 40 / 0.06);
+  --skeleton-shine: rgb(255 255 255 / 0.6);
+  --glass-hl: 0.6;
+}

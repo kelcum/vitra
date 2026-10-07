@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitra Privacy</title>
+<meta name="description" content="How the Vitra launcher handles your data: what stays on your computer, what is sent where, and what is never collected.">
+<meta name="theme-color" content="#07060c">
+<link rel="canonical" href="https://xan.gripe/vitra/privacy/">
+<link rel="icon" href="/vitra/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..900&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/vitra/assets/site.css">
+</head>
+<body>
+<div class="backdrop" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="nav glass">
+  <a class="brand" href="/vitra/"><img src="/vitra/icon.png" alt="" width="28" height="28">Vitra</a>
+  <nav class="nav-links" aria-label="Pages">
+    <a href="/vitra/">Home</a>
+    <a href="/vitra/terms/">Terms</a>
+  </nav>
+  <a class="btn btn-ghost" href="/vitra/">Back to Vitra</a>
+</header>
+
+<main class="legal">
+  <h1><span class="gradient-text">Privacy statement</span></h1>
+  <p class="updated">Last updated October 6, 2026</p>
+
+  <div class="glass">
+    <h2>The short version</h2>
+    <p>Vitra runs on your computer. It has no accounts of its own, no servers of its own, and no analytics, ads or telemetry. It only talks to the services it needs to install and launch Minecraft, and only when you use the feature that needs them.</p>
+
+    <h2>What stays on your computer</h2>
+    <ul>
+      <li><strong>Sign-in tokens</strong> from Microsoft, Xbox Live and Minecraft. They are encrypted, and the key is kept in Windows Credential Manager.</li>
+      <li><strong>Your profile details</strong>: Minecraft name, UUID, skin and cape, so they can be shown in the app.</li>
+      <li><strong>Settings, instances, worlds, mods, skins and your server list.</strong></li>
+      <li><strong>Logs</strong>, for troubleshooting. Access tokens are removed from launch records before they're written.</li>
+    </ul>
+    <p>None of this is uploaded anywhere by Vitra.</p>
+
+    <h2>What is sent where</h2>
+    <ul>
+      <li><strong>Microsoft and Xbox Live</strong> (<code>login.microsoftonline.com</code>, <code>user.auth.xboxlive.com</code>, <code>xsts.auth.xboxlive.com</code>), when you sign in or a sign-in is refreshed. You enter your password on Microsoft's own website, never in Vitra.</li>
+      <li><strong>Mojang / Minecraft services</strong> (<code>api.minecraftservices.com</code>), to get a Minecraft token, check that you own the game, read your profile, change your skin or cape when you ask it to, and get your account's chat-signing key for Vitra cosmetics.</li>
+      <li><strong>Mojang's download servers</strong>, for game files, Java runtimes, the version list and the update news on the home screen.</li>
+      <li><strong>Modrinth</strong> (<code>api.modrinth.com</code>, <code>cdn.modrinth.com</code>), when you browse or install mods, modpacks, resource packs and shaders, or check for updates. Modpacks may also download files from GitHub or GitLab when the pack lists them there.</li>
+      <li><strong>Mod loader sites</strong> (Fabric, Quilt, Forge and NeoForge), for loader versions and files.</li>
+      <li><strong>OptiFine</strong> (<code>optifine.net</code>), to show your OptiFine cape, which is looked up by your player name. When you choose <em>Edit</em>, Vitra opens OptiFine's cape editor after a Mojang session check, so OptiFine never receives your token.</li>
+      <li><strong>Skin search</strong>: player names you search go to Mojang's public profile API, and skin links you paste are downloaded from the site in the link.</li>
+      <li><strong>xan.gripe</strong>, to check for a newer Vitra. Only a small version file is downloaded, and an update is only installed when you choose to.</li>
+      <li><strong>Vitra cosmetics</strong> (<code>api.xan.gripe</code>), when <em>Vitra badges and capes</em> is on (Settings → Launcher). To prove you own your account, Vitra sends your player name and UUID with the chat-signing key Mojang gives every account, never your token or password. While you play a Fabric 26.3 instance, the game tells it about once a minute that you're on Vitra, and asks which players around you use Vitra and which cape they wear, by their UUIDs. A cape you upload is stored there and shown to other Vitra players.</li>
+      <li><strong>Minecraft servers on the Servers page</strong>, which receive a standard status request, the same one the game's multiplayer screen sends, so Vitra can show player counts and ping.</li>
+    </ul>
+    <p>These services receive what any connection includes, such as your IP address, and handle it under their own privacy policies. When you launch the game, Minecraft itself connects to Mojang and to the servers you join.</p>
+
+    <h2>What is never collected</h2>
+    <ul>
+      <li>Your Microsoft password.</li>
+      <li>Usage statistics, crash reports or device identifiers. Nothing is sent to the developer.</li>
+      <li>Anything for advertising. Vitra has no ads and shares no data with advertisers.</li>
+    </ul>
+
+    <h2>Removing your data</h2>
+    <p>Signing out in Vitra deletes that account's tokens from your computer. Uninstalling Vitra and deleting its data folder (<code>%APPDATA%\app.vitra.launcher</code>) removes everything else, along with your game folder if you moved it in Settings. You can also revoke Vitra's access to your Microsoft account at any time at <a href="https://account.live.com/consent/Manage">account.live.com/consent/Manage</a>.</p>
+
+    <h2>Changes</h2>
+    <p>If Vitra starts handling data differently, this page will be updated first and the date above will change.</p>
+
+    <h2>Contact</h2>
+    <p>Vitra is a personal, non-commercial project. Questions can go to <a href="https://www.instagram.com/xan.pl/">@xan.pl on Instagram</a>.</p>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="/vitra/"><img src="/vitra/icon.png" alt="" width="28" height="28">Vitra</a>
+    <span>A personal, non-commercial project.</span>
+    <nav aria-label="Legal"><a href="/vitra/privacy/">Privacy</a><a href="/vitra/terms/">Terms</a></nav>
+    <p class="disclaimer">NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.</p>
+  </div>
+</footer>
+</body>
+</html>

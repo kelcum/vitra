@@ -1,0 +1,25 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "vitra:font/badge.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\ue000"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "vitra:font/badge_owner.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\ue100\ue101\ue102\ue103",
+        "\ue104\ue105\ue106\ue107",
+        "\ue108\ue109\ue10a\ue10b",
+        "\ue10c\ue10d\ue10e\ue10f"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+}
+.boot-card {
+  width: 380px;
+  padding: 36px 32px 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  border-radius: 30px;
+}
+.boot-logo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  margin-bottom: 18px;
+}
+.boot-logo-glow {
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(var(--accent-rgb) / 0.55), transparent);
+  animation: pulse-soft 3s ease-in-out infinite;
+}
+.boot-title {
+  font-size: 28px;
+  font-weight: 720;
+  letter-spacing: -0.03em;
+}
+.boot-sub {
+  color: var(--text-3);
+  font-size: 13px;
+  margin-top: 2px;
+}
+.boot-stages {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+.boot-stages li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 4px;
+  font-size: 13px;
+  font-weight: 520;
+}
+.boot-stage-icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  margin-top: 1px;
+}
+.boot-stage-icon svg {
+  width: 15px;
+  height: 15px;
+}
+.boot-stages li[data-status="done"] .boot-stage-icon {
+  color: var(--success);
+}
+.boot-stages li[data-status="warn"] .boot-stage-icon {
+  color: var(--warning);
+}
+.boot-stages li[data-status="error"] .boot-stage-icon {
+  color: var(--danger);
+}
+.boot-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.boot-detail {
+  display: block;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 450;
+  margin-top: 1px;
+}
+.boot-error {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--danger);
+  font-size: 13px;
+  user-select: text;
+}

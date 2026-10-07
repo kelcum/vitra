@@ -1,0 +1,298 @@
+// api.xan.gripe: Vitra cosmetics.
+//
+// Vitra proves a player owns their Minecraft account with the key pair Mojang issues every account
+// for chat signing (see verifyProof); nothing secret ever leaves the player's computer.
+// The game then gets a short-lived token so it can say "I'm on Vitra right now" (the badge),
+// and anyone can look up which players use Vitra and which cape they wear.
+
+import MOJANG_KEYS from './mojang-keys.json';   // api.minecraftservices.com/publickeys → playerCertificateKeys
+
+const ONLINE_MS = 3 * 60 * 1000;          // a ping within this window counts as online
+const TOKEN_TTL_MS = 24 * 3600 * 1000;
+const PING_WRITE_MS = 60 * 1000;          // don't rewrite last_seen more often than this
+const MAX_PNG_BYTES = 1_500_000;
+const MAX_UPLOADS_PER_DAY = 20;
+const MAX_LOOKUP = 300;
+const UUID_RE = /^[0-9a-f]{32}$/;
+const NAME_RE = /^[A-Za-z0-9_]{1,16}$/;
+
+class HttpError extends Error {
+  constructor(status, message) { super(message); this.status = status; }
+}
+
+export default {
+  async fetch(req, env, ctx) {
+    if (req.method === 'OPTIONS') return withCors(new Response(null, { status: 204 }));
+    try {
+      return withCors(await route(req, env, ctx, new URL(req.url)));
+    } catch (e) {
+      if (e instanceof HttpError) return withCors(json({ error: e.message }, e.status));
+      console.error(e && e.stack || e);
+      return withCors(json({ error: 'Something went wrong on our side.' }, 500));
+    }
+  },
+};
+
+async function route(req, env, ctx, url) {
+  const p = url.pathname, m = req.method;
+  if (p === '/' && m === 'GET') return json({ service: 'vitra-api', ok: true });
+  if (p === '/v1/auth' && m === 'POST') return auth(env, await body(req));
+  if (p === '/v1/ping' && m === 'POST') return ping(env, req, await body(req));
+  if (p === '/v1/lookup' && m === 'POST') return json({ players: await lookup(env, (await body(req)).players) });
+  if (p === '/v1/presets' && m === 'GET') return presets(env);
+  if (p === '/v1/me/cape' && m === 'PUT') return setCape(env, await body(req));
+  let r;
+  if ((r = p.match(/^\/v1\/players\/([0-9a-f]{32})$/)) && m === 'GET') return player(env, r[1]);
+  if ((r = p.match(/^\/v1\/capes\/([0-9a-f]{20})\.png$/)) && m === 'GET') return capeImage(env, ctx, req, r[1]);
+  if ((r = p.match(/^\/v1\/admin\/presets\/([a-z0-9-]{1,32})$/)) && m === 'PUT') return putPreset(env, req, r[1], await body(req));
+  if ((r = p.match(/^\/v1\/admin\/capes\/([0-9a-f]{32})$/)) && m === 'DELETE') return removeCape(env, r[1], await body(req));
+  throw new HttpError(404, 'Not found.');
+}
+
+// ── sign-in ────────────────────────────────────────────────────────────────
+//
+// Mojang's session server won't answer Cloudflare, so ownership is proven with the key pair every
+// Minecraft account gets for chat signing: Mojang signs (UUID, expiry, public key), and the player
+// signs our message with the private key. Both checks run here, without asking Mojang anything.
+
+const PROOF_MAX_AGE_MS = 5 * 60 * 1000;
+const b64bytes = s => Uint8Array.from(atob(String(s)), c => c.charCodeAt(0));
+let mojangKeys;
+
+async function mojangCertificateKeys() {
+  // Mojang signs with SHA-1; SHA-256 is accepted too in case that ever changes.
+  mojangKeys ??= await Promise.all(MOJANG_KEYS.flatMap(k => ['SHA-1', 'SHA-256'].map(hash =>
+    crypto.subtle.importKey('spki', b64bytes(k.publicKey), { name: 'RSASSA-PKCS1-v1_5', hash }, false, ['verify']))));
+  return mojangKeys;
+}
+
+// proof: { uuid, publicKey (base64 DER), expiresAt (ms), keySignature (Mojang's, base64), ts (ms), signature (base64) }
+async function verifyProof(name, proof, purpose) {
+  if (typeof name !== 'string' || !NAME_RE.test(name)) throw new HttpError(400, 'Bad player name.');
+  const p = proof && typeof proof === 'object' ? proof : {};
+  if (!UUID_RE.test(p.uuid || '')) throw new HttpError(400, 'Missing proof of account.');
+  if (typeof p.expiresAt !== 'number' || p.expiresAt < Date.now()) throw new HttpError(401, 'Your Minecraft key expired. Try again.');
+  if (typeof p.ts !== 'number' || Math.abs(Date.now() - p.ts) > PROOF_MAX_AGE_MS) {
+    throw new HttpError(401, "Your computer's clock is off. Set the right time and try again.");
+  }
+  let keyDer, mojangSig, playerSig;
+  try { keyDer = b64bytes(p.publicKey); mojangSig = b64bytes(p.keySignature); playerSig = b64bytes(p.signature); } catch {
+    throw new HttpError(400, 'Proof of account is malformed.');
+  }
+  // What Mojang signed: UUID (16 bytes) + expiry (8 bytes, big endian) + the public key.
+  const payload = new Uint8Array(24 + keyDer.length);
+  for (let i = 0; i < 16; i++) payload[i] = parseInt(p.uuid.substr(i * 2, 2), 16);
+  new DataView(payload.buffer).setBigUint64(16, BigInt(p.expiresAt));
+  payload.set(keyDer, 24);
+  let mojangOk = false;
+  for (const k of await mojangCertificateKeys()) {
+    if (await crypto.subtle.verify('RSASSA-PKCS1-v1_5', k, mojangSig, payload)) { mojangOk = true; break; }
+  }
+  if (!mojangOk) throw new HttpError(401, "Couldn't confirm you own this Minecraft account.");
+  let playerKey;
+  try { playerKey = await crypto.subtle.importKey('spki', keyDer, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']); } catch {
+    throw new HttpError(400, 'Proof of account is malformed.');
+  }
+  const message = new TextEncoder().encode(`vitra|${p.uuid}|${p.ts}|${purpose}`);
+  if (!await crypto.subtle.verify('RSASSA-PKCS1-v1_5', playerKey, playerSig, message)) {
+    throw new HttpError(401, "Couldn't confirm you own this Minecraft account.");
+  }
+  return { uuid: p.uuid, name };
+}
+
+async function sha256hex(text) {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(d)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+async function upsertUser(env, who) {
+  const now = Date.now();
+  await env.DB.prepare(
+    `INSERT INTO users (uuid, name, created, last_seen) VALUES (?1, ?2, ?3, 0)
+     ON CONFLICT (uuid) DO UPDATE SET name = ?2`
+  ).bind(who.uuid, who.name, now).run();
+}
+
+async function auth(env, b) {
+  const who = await verifyProof(b.name, b.proof, 'auth');
+  await upsertUser(env, who);
+  const token = await sign(env, { u: who.uuid, e: Date.now() + TOKEN_TTL_MS });
+  return json({ token, uuid: who.uuid, expiresIn: TOKEN_TTL_MS, ...(await player(env, who.uuid, true)) });
+}
+
+// ── presence and lookups (what the game asks for) ─────────────────────────
+
+async function ping(env, req, b) {
+  const claims = await verifyToken(env, (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''));
+  if (!claims) throw new HttpError(401, 'Token expired.');
+  const now = Date.now();
+  await env.DB.prepare('UPDATE users SET last_seen = ?1 WHERE uuid = ?2 AND last_seen < ?3')
+    .bind(now, claims.u, now - PING_WRITE_MS).run();
+  const players = Array.isArray(b.players) ? b.players : [];
+  return json({ players: await lookup(env, [claims.u, ...players]) });
+}
+
+async function lookup(env, list) {
+  if (!Array.isArray(list)) throw new HttpError(400, 'Expected a list of players.');
+  const ids = [...new Set(list.filter(u => typeof u === 'string').map(u => u.replace(/-/g, '').toLowerCase()).filter(u => UUID_RE.test(u)))].slice(0, MAX_LOOKUP);
+  const out = {}, now = Date.now();
+  for (let i = 0; i < ids.length; i += 90) {                      // D1 allows 100 bound values per query
+    const chunk = ids.slice(i, i + 90);
+    const { results } = await env.DB.prepare(
+      `SELECT u.uuid, u.last_seen, c.id, c.w, c.h, c.frames, c.delay FROM users u
+       LEFT JOIN capes c ON c.id = u.cape WHERE u.uuid IN (${chunk.map((_, j) => '?' + (j + 1)).join(',')})`
+    ).bind(...chunk).all();
+    for (const r of results) out[r.uuid] = { online: now - r.last_seen < ONLINE_MS, badge: badgeFor(env, r.uuid), cape: r.id ? capeInfo(r) : null };
+  }
+  return out;
+}
+
+const isAdmin = (env, uuid) => (env.ADMINS || '').split(',').map(s => s.trim()).includes(uuid);
+// Which badge the game draws: the owner gets the animated one.
+const badgeFor = (env, uuid) => (isAdmin(env, uuid) ? 'owner' : 'vitra');
+
+const capeInfo = r => ({ id: r.id, url: `https://api.xan.gripe/v1/capes/${r.id}.png`, w: r.w, h: r.h, frames: r.frames, delay: r.delay });
+
+async function player(env, uuid, raw) {
+  const r = await env.DB.prepare(
+    'SELECT u.uuid, u.name, u.last_seen, c.id, c.w, c.h, c.frames, c.delay FROM users u LEFT JOIN capes c ON c.id = u.cape WHERE u.uuid = ?1'
+  ).bind(uuid).first();
+  const info = r ? { vitra: true, name: r.name, online: Date.now() - r.last_seen < ONLINE_MS, badge: badgeFor(env, r.uuid), cape: r.id ? capeInfo(r) : null } : { vitra: false, cape: null };
+  return raw ? info : json(info);
+}
+
+// ── capes ──────────────────────────────────────────────────────────────────
+
+async function presets(env) {
+  const { results } = await env.DB.prepare(
+    'SELECT p.slug, p.name, c.id, c.w, c.h, c.frames, c.delay FROM presets p JOIN capes c ON c.id = p.cape ORDER BY p.sort, p.name'
+  ).all();
+  return json({ presets: results.map(r => ({ slug: r.slug, name: r.name, cape: capeInfo(r) })) },
+    200, { 'cache-control': 'public, max-age=300' });
+}
+
+async function capeImage(env, ctx, req, id) {
+  const cache = caches.default;
+  const hit = await cache.match(req);
+  if (hit) return hit;
+  const r = await env.DB.prepare('SELECT png FROM capes WHERE id = ?1').bind(id).first();
+  if (!r) throw new HttpError(404, 'No such cape.');
+  const res = new Response(new Uint8Array(r.png), {
+    headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' },
+  });
+  ctx.waitUntil(cache.put(req, res.clone()));
+  return res;
+}
+
+// Checks a cape image: a PNG whose frames (each a 2:1 cape texture) are stacked top to bottom.
+async function storeCape(env, b, owner) {
+  if (typeof b.image !== 'string') throw new HttpError(400, 'Missing image.');
+  let bytes;
+  try { bytes = Uint8Array.from(atob(b.image), c => c.charCodeAt(0)); } catch { throw new HttpError(400, 'Image is not valid base64.'); }
+  if (bytes.length > MAX_PNG_BYTES) throw new HttpError(413, 'That cape is too big. Keep it under 1.5 MB.');
+  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (bytes.length < 33 || sig.some((v, i) => bytes[i] !== v)) throw new HttpError(400, 'The cape has to be a PNG.');
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const w = dv.getUint32(16), h = dv.getUint32(20);
+  if (w % 64 || w < 64 || w > 512) throw new HttpError(400, 'Cape width must be 64, 128, 192, … up to 512 pixels.');
+  const frameH = w / 2, frames = h / frameH;
+  if (!Number.isInteger(frames) || frames < 1 || frames > 64) throw new HttpError(400, 'The image must be 1 to 64 cape frames stacked on top of each other.');
+  if (b.frames !== undefined && b.frames !== frames) throw new HttpError(400, 'Frame count does not match the image.');
+  const delay = Math.round(Number(b.delay) || 100);
+  if (delay < 20 || delay > 5000) throw new HttpError(400, 'Frame time must be between 20 and 5000 ms.');
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  const id = [...new Uint8Array(hash)].slice(0, 10).map(x => x.toString(16).padStart(2, '0')).join('');
+  await env.DB.prepare('INSERT OR IGNORE INTO capes (id, png, w, h, frames, delay, owner, created) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)')
+    .bind(id, bytes.buffer, w, h, frames, delay, owner, Date.now()).run();
+  return id;
+}
+
+// Body: { name, proof } plus one of { preset: slug } | { image: base64 PNG, frames, delay } | { remove: true }
+async function setCape(env, b) {
+  const purpose = b.preset ? `cape:preset:${b.preset}` : b.image ? `cape:image:${await sha256hex(b.image)}` : 'cape:remove';
+  const who = await verifyProof(b.name, b.proof, purpose);
+  await upsertUser(env, who);
+  let capeId = null;
+  if (b.preset) {
+    const p = await env.DB.prepare('SELECT cape FROM presets WHERE slug = ?1').bind(String(b.preset)).first();
+    if (!p) throw new HttpError(404, 'No such cape.');
+    capeId = p.cape;
+  } else if (b.image) {
+    const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM capes WHERE owner = ?1 AND created > ?2')
+      .bind(who.uuid, Date.now() - 86400000).first();
+    if (recent.n >= MAX_UPLOADS_PER_DAY) throw new HttpError(429, "That's a lot of capes for one day. Try again tomorrow.");
+    capeId = await storeCape(env, b, who.uuid);
+  } else if (!b.remove) {
+    throw new HttpError(400, 'Pick a cape, upload one, or remove yours.');
+  }
+  await env.DB.prepare('UPDATE users SET cape = ?1 WHERE uuid = ?2').bind(capeId, who.uuid).run();
+  return player(env, who.uuid);
+}
+
+// ── admin ──────────────────────────────────────────────────────────────────
+
+async function putPreset(env, req, slug, b) {
+  if (!env.ADMIN_KEY || req.headers.get('x-admin-key') !== env.ADMIN_KEY) throw new HttpError(403, 'Not allowed.');
+  const id = await storeCape(env, b, 'preset');
+  await env.DB.prepare(
+    `INSERT INTO presets (slug, name, cape, sort) VALUES (?1, ?2, ?3, ?4)
+     ON CONFLICT (slug) DO UPDATE SET name = ?2, cape = ?3, sort = ?4`
+  ).bind(slug, String(b.title || slug), id, Number(b.sort) || 0).run();
+  return json({ slug, id });
+}
+
+// An admin (their UUID is in ADMINS) takes someone's cape off.
+async function removeCape(env, uuid, b) {
+  const who = await verifyProof(b.name, b.proof, `admin:remove:${uuid}`);
+  if (!isAdmin(env, who.uuid)) throw new HttpError(403, 'Not allowed.');
+  await env.DB.prepare('UPDATE users SET cape = NULL WHERE uuid = ?1').bind(uuid).run();
+  return json({ removed: uuid });
+}
+
+// ── helpers ────────────────────────────────────────────────────────────────
+
+async function body(req) {
+  if (Number(req.headers.get('content-length') || 0) > MAX_PNG_BYTES * 1.4 + 4096) throw new HttpError(413, 'Request too large.');
+  try { return await req.json(); } catch { throw new HttpError(400, 'Expected JSON.'); }
+}
+
+function json(data, status = 200, headers = {}) {
+  return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', ...headers } });
+}
+
+function withCors(res) {
+  const r = new Response(res.body, res);
+  r.headers.set('access-control-allow-origin', '*');
+  r.headers.set('access-control-allow-headers', 'content-type, authorization');
+  r.headers.set('access-control-allow-methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  return r;
+}
+
+const b64url = s => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64url = s => atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+
+async function hmac(env, data) {
+  if (!env.TOKEN_SECRET) throw new Error('TOKEN_SECRET is not set');
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.TOKEN_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
+  return b64url(String.fromCharCode(...new Uint8Array(sig)));
+}
+
+async function sign(env, claims) {
+  const payload = b64url(JSON.stringify(claims));
+  return payload + '.' + await hmac(env, payload);
+}
+
+async function verifyToken(env, token) {
+  const [payload, sig] = String(token).split('.');
+  if (!payload || !sig) return null;
+  const expected = await hmac(env, payload);
+  if (expected.length !== sig.length) return null;
+  let diff = 0;
+  for (let i = 0; i < sig.length; i++) diff |= sig.charCodeAt(i) ^ expected.charCodeAt(i);
+  if (diff) return null;
+  try {
+    const claims = JSON.parse(unb64url(payload));
+    return claims.e > Date.now() && UUID_RE.test(claims.u) ? claims : null;
+  } catch { return null; }
+}

@@ -1,0 +1,19 @@
+name = "vitra-api"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = false
+routes = [{ pattern = "api.xan.gripe", custom_domain = true }]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "vitra"
+database_id = "44138582-1188-41ec-9d3b-61d7ebf1ebd3"
+
+[vars]
+# Minecraft UUIDs (no dashes, comma separated) of the owners: they get the animated badge and can
+# take other players' capes off. a3656b00… is bfwe.
+ADMINS = "a3656b003a2940e8b2315fdd4037b8e5"
+
+# Secrets, set with `npx wrangler secret put <NAME>`:
+#   TOKEN_SECRET  signs the game's presence tokens
+#   ADMIN_KEY     lets scripts/upload-capes.py add preset capes

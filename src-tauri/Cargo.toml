@@ -1,0 +1,49 @@
+[package]
+name = "vitra"
+version = "0.1.2"
+description = "Vitra — a fast, beautiful Minecraft launcher"
+edition = "2024"
+
+[lib]
+name = "vitra_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.13", features = ["json", "stream", "gzip", "multipart", "query", "form"] }
+futures-util = "0.3"
+thiserror = "2"
+log = "0.4"
+
+sha1 = "0.10"
+rsa = { version = "0.9", features = ["sha2"] }
+hex = "0.4"
+base64 = "0.22"
+zip = { version = "8", default-features = false, features = ["deflate"] }
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+sysinfo = "0.39"
+flate2 = "1"
+
+keyring = { version = "3", features = ["windows-native", "apple-native", "sync-secret-service"] }
+chacha20poly1305 = "0.10"
+hickory-resolver = { version = "0.25", default-features = false, features = ["tokio", "system-config"] }
+tauri-plugin-updater = "2"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

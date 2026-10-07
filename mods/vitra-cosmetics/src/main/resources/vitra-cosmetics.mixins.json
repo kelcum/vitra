@@ -1,0 +1,8 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "app.vitra.cosmetics.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["AbstractClientPlayerMixin", "PlayerMixin", "PlayerTabOverlayMixin"],
+  "injectors": { "defaultRequire": 1 }
+}
