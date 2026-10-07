@@ -171,7 +171,7 @@ export function ModsTab({ instance }: { instance: InstanceView }) {
         }}>
           Add files
         </Button>
-        <Button variant="primary" icon={<Compass />} onClick={() => navigate("discover", { type: "mod", target: instance.id })}>
+        <Button icon={<Compass />} onClick={() => navigate("discover", { type: "mod", target: instance.id })}>
           Browse mods
         </Button>
         <IconButton label="Recently removed" onClick={() => setTrashOpen(true)}>

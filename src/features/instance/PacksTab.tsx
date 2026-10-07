@@ -78,7 +78,7 @@ export function ResourcePacksTab({ instance }: { instance: InstanceView }) {
         >
           Add files
         </Button>
-        <Button variant="primary" icon={<Compass />} onClick={() => navigate("discover", { type: "resourcepack", target: instance.id })}>
+        <Button icon={<Compass />} onClick={() => navigate("discover", { type: "resourcepack", target: instance.id })}>
           Browse packs
         </Button>
         <IconButton label="Recently removed" onClick={() => setTrashOpen(true)}>
@@ -282,7 +282,7 @@ export function ShadersTab({ instance }: { instance: InstanceView }) {
         >
           Add files
         </Button>
-        <Button variant="primary" icon={<Compass />} onClick={() => navigate("discover", { type: "shader", target: instance.id })}>
+        <Button icon={<Compass />} onClick={() => navigate("discover", { type: "shader", target: instance.id })}>
           Browse shaders
         </Button>
       </div>

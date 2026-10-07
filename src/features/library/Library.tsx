@@ -1,7 +1,7 @@
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { motion } from "motion/react";
 import { Archive, ChevronDown, Copy, FolderOpen, HardDriveDownload, LayoutGrid, MoreHorizontal, PackageOpen, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { InstanceIcon } from "../../components/art/PixelIcon";
 import { PlayButton } from "../../components/PlayButton";
 import { Button, IconButton } from "../../components/ui/Button";
@@ -9,9 +9,9 @@ import { SearchInput, TextInput } from "../../components/ui/Controls";
 import { Empty } from "../../components/ui/Feedback";
 import { ConfirmDialog, Menu, Modal } from "../../components/ui/Overlay";
 import { api, errorMessage } from "../../lib/api";
-import { formatDuration, LOADER_LABEL, relativeTime } from "../../lib/format";
+import { fileSrc, formatDuration, LOADER_LABEL, relativeTime } from "../../lib/format";
 import { toast, useDialogs, useInstances, useNav, useSettings } from "../../lib/store";
-import type { InstanceView } from "../../lib/types";
+import type { InstanceCover, InstanceView } from "../../lib/types";
 import { ImportLauncherDialog } from "./ImportLauncherDialog";
 import "./library.css";
 
@@ -25,6 +25,11 @@ export default function Library() {
   const [duplicating, setDuplicating] = useState<InstanceView | null>(null);
   const [busy, setBusy] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [covers, setCovers] = useState<Record<string, InstanceCover>>({});
+
+  useEffect(() => {
+    api.instanceCovers().then(setCovers).catch(() => {});
+  }, [instances]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -66,7 +71,7 @@ export default function Library() {
             { label: "Modrinth modpack file", icon: <PackageOpen />, onSelect: importPack },
           ]}
         />
-        <Button variant="primary" icon={<Plus />} onClick={() => setDialogs({ createInstance: true })}>
+        <Button icon={<Plus />} onClick={() => setDialogs({ createInstance: true })}>
           New instance
         </Button>
       </div>
@@ -96,6 +101,7 @@ export default function Library() {
             >
               <InstanceCard
                 instance={inst}
+                cover={covers[inst.id] ?? null}
                 onDelete={() => setDeleting(inst)}
                 onDuplicate={() => setDuplicating(inst)}
               />
@@ -186,10 +192,12 @@ function DuplicateDialog({ instance, onClose }: { instance: InstanceView | null;
 
 function InstanceCard({
   instance,
+  cover,
   onDelete,
   onDuplicate,
 }: {
   instance: InstanceView;
+  cover: InstanceCover | null;
   onDelete: () => void;
   onDuplicate: () => void;
 }) {
@@ -206,18 +214,28 @@ function InstanceCard({
           navigate("instance", { id: instance.id });
         }}
       >
-        <div className="instance-card-top">
-          <InstanceIcon icon={instance.icon} size={52} />
-          {instance.running && <span className="chip chip--success">Running</span>}
+        {/* Its newest screenshot, else its latest world's icon blurred into a backdrop. */}
+        <div className="instance-cover">
+          {cover ? (
+            <img src={fileSrc(cover.path)} alt="" loading="lazy" decoding="async" className={`instance-cover-img instance-cover-img--${cover.kind}`} />
+          ) : (
+            <div className="instance-cover-art" />
+          )}
+          {instance.running && <span className="chip chip--success instance-cover-chip">Running</span>}
         </div>
-        <div className="instance-card-name truncate">{instance.name}</div>
-        <div className="instance-card-meta truncate">
-          {instance.gameVersion} · {LOADER_LABEL[instance.loader]}
-          {instance.modpack ? ` · ${instance.modpack.title}` : ""}
-        </div>
-        <div className="instance-card-stats">
-          <span>{instance.lastPlayed ? relativeTime(instance.lastPlayed) : instance.installedVersion ? "Never played" : "Not installed"}</span>
-          {instance.playTimeSecs > 0 && <span>{formatDuration(instance.playTimeSecs)}</span>}
+        <div className="instance-card-body">
+          <div className="instance-card-icon">
+            <InstanceIcon icon={instance.icon} size={52} />
+          </div>
+          <div className="instance-card-name truncate">{instance.name}</div>
+          <div className="instance-card-meta truncate">
+            {instance.gameVersion} · {LOADER_LABEL[instance.loader]}
+            {instance.modpack ? ` · ${instance.modpack.title}` : ""}
+          </div>
+          <div className="instance-card-stats">
+            <span>{instance.lastPlayed ? relativeTime(instance.lastPlayed) : instance.installedVersion ? "Never played" : "Not installed"}</span>
+            {instance.playTimeSecs > 0 && <span>{formatDuration(instance.playTimeSecs)}</span>}
+          </div>
         </div>
       </button>
       <div className="instance-card-actions">

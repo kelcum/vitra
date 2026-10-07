@@ -181,7 +181,7 @@ export default function Servers() {
         <IconButton label="Refresh status" tipPos="bottom" onClick={pings.refresh}>
           <RefreshCw />
         </IconButton>
-        <Button variant="primary" icon={<Plus />} onClick={() => setEditing("new")}>
+        <Button icon={<Plus />} onClick={() => setEditing("new")}>
           Add server
         </Button>
       </div>
@@ -400,7 +400,7 @@ function ServerCard({ server, ping, onJoin, actions }: { server: ServerEntry; pi
           )}
           items={actions}
         />
-        <Button size="sm" variant="primary" icon={<Play />} onClick={onJoin}>
+        <Button size="sm" icon={<Play />} onClick={onJoin}>
           Play
         </Button>
       </div>

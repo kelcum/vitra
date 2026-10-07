@@ -1,12 +1,15 @@
 .skins-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr);
+  align-items: start;
   gap: 14px;
-  min-height: 560px;
 }
+/* Sized to the window and pinned while the panels beside it scroll, so the whole player (and the
+   cape) is always in view. */
 .skin-stage {
-  position: relative;
-  min-height: 560px;
+  position: sticky;
+  top: 0;
+  height: max(460px, calc(100vh - var(--topbar-h) - 150px));
   overflow: hidden;
 }
 .skin-stage-glow {
@@ -202,6 +205,9 @@
   .skins-layout {
     grid-template-columns: 1fr;
   }
+  .skin-stage {
+    position: relative;
+  }
 }
 
 /* ---------------------------------------------------------------- OptiFine */
@@ -294,4 +300,90 @@
   font-size: 17px;
   font-weight: 760;
   letter-spacing: -0.02em;
+}
+
+/* ---------------------------------------------------------------- popular */
+.popular-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px 8px 14px;
+  border-radius: var(--r-md);
+  box-shadow: inset 0 0 0 1px rgb(var(--accent-rgb) / 0.35);
+}
+button.skin-card {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------------------------------------------------------------- name change */
+.name-verdict {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 8px 8px 8px 14px;
+  border-radius: var(--r-md);
+  background: var(--fill-1);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-weight: 640;
+}
+.name-verdict svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.name-verdict--ok {
+  color: var(--success);
+  background: rgb(var(--success-rgb) / 0.08);
+  box-shadow: inset 0 0 0 1px rgb(var(--success-rgb) / 0.25);
+}
+.name-verdict--bad {
+  color: var(--danger);
+  background: rgb(var(--danger-rgb) / 0.07);
+  box-shadow: inset 0 0 0 1px rgb(var(--danger-rgb) / 0.22);
+}
+.name-verdict span {
+  color: var(--text-1);
+}
+.name-ideas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.name-idea {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  font-size: 13px;
+  font-weight: 640;
+  color: var(--text-1);
+  background: rgb(var(--success-rgb) / 0.08);
+  box-shadow: inset 0 0 0 1px rgb(var(--success-rgb) / 0.3);
+  transition:
+    background var(--d-1) ease,
+    transform var(--d-2) var(--ease-out);
+}
+.name-idea:hover:not(:disabled) {
+  background: rgb(var(--success-rgb) / 0.16);
+  transform: translateY(-1px);
+}
+.name-idea:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.name-swap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--r-lg);
+  background: var(--fill-1);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 20px;
+  letter-spacing: -0.01em;
+}
+.name-swap-arrow {
+  color: var(--accent-text);
 }

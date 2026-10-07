@@ -12,6 +12,79 @@
   min-height: 330px;
   justify-content: flex-end;
 }
+
+/* ---------------------------------------------------------------- you, in 3D */
+.hero--with-player {
+  padding-right: calc(48px + clamp(220px, 27%, 330px));
+}
+.hero-player {
+  position: absolute;
+  right: 2%;
+  top: -36px;
+  bottom: -14px;
+  width: clamp(220px, 27%, 330px);
+}
+.hero-player .skin-canvas-wrap {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+}
+.hero-player-glow {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  width: 92%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(var(--accent-rgb) / 0.26), transparent);
+  pointer-events: none;
+}
+.hero-player::after {
+  /* the shadow it stands on */
+  content: "";
+  position: absolute;
+  left: 28%;
+  right: 28%;
+  bottom: 9%;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(0 0 0 / 0.45), transparent);
+  pointer-events: none;
+}
+.hero-player-link {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 1;
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  background: rgb(var(--tint) / 0.6);
+  backdrop-filter: blur(12px);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 12px;
+  font-weight: 640;
+  color: var(--text-1);
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity var(--d-2) ease,
+    transform var(--d-2) var(--ease-out);
+}
+.hero-player:hover .hero-player-link,
+.hero-player-link:focus-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+@media (max-width: 980px) {
+  .hero-player {
+    display: none;
+  }
+  .hero--with-player {
+    padding-right: 36px;
+  }
+}
+
 .hero-status {
   display: inline-flex;
   align-items: center;
@@ -28,6 +101,10 @@
   height: 8px;
   border-radius: 50%;
   background: var(--text-3);
+}
+.hero-dot--ready {
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgb(var(--success-rgb) / 0.18);
 }
 .hero-dot--live {
   background: var(--success);
@@ -178,6 +255,72 @@
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 14px;
 }
+/* Cards in a row share a height; their contents stretch to fill it instead of leaving a gap. */
+.home-grid > .panel {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------------------------------------------------------------- Vitra */
+.vitra-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 640;
+  color: var(--success);
+}
+.vitra-live::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgb(var(--success-rgb) / 0.2);
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+.vitra-cape-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  padding: 10px 14px 10px 10px;
+  border-radius: var(--r-md);
+  background:
+    radial-gradient(120% 140% at 0% 50%, rgb(var(--accent-rgb) / 0.16), transparent 60%),
+    var(--fill-1);
+  border: 1px solid var(--line);
+  text-align: left;
+  transition:
+    background var(--d-1) ease,
+    border-color var(--d-1) ease,
+    transform var(--d-2) var(--ease-out);
+}
+.vitra-cape-row:hover {
+  border-color: rgb(var(--accent-rgb) / 0.4);
+  transform: translateY(-2px);
+}
+.vitra-cape-art {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 92px;
+  flex: none;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 0.18);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.vitra-cape-art .vcape-thumb {
+  width: 40px;
+  height: 64px;
+}
+.vitra-cape-go {
+  flex: none;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--accent-text);
+}
 .world-list {
   display: flex;
   flex-direction: column;
@@ -252,12 +395,15 @@
 .tile-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 1fr;
+  flex: 1;
   gap: 8px;
 }
 .tile {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 14px 6px 12px;
   border-radius: var(--r-md);

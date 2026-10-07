@@ -433,3 +433,33 @@ pub fn recent_screenshots(state: State<'_, Arc<AppState>>, limit: usize) -> Vec<
     shots.into_iter().take(limit).map(|(_, p)| p.to_string_lossy().to_string()).collect()
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Cover {
+    /// "screenshot" (a full picture) or "world" (a 64×64 world icon).
+    pub kind: &'static str,
+    pub path: String,
+}
+
+/// A picture for each instance's library card: its newest screenshot, else its latest world's icon.
+#[tauri::command]
+pub fn instance_covers(state: State<'_, Arc<AppState>>) -> std::collections::HashMap<String, Cover> {
+    let mut out = std::collections::HashMap::new();
+    for inst in list_all(&state) {
+        let newest = std::fs::read_dir(game_dir(&state, &inst).join("screenshots"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.path().extension().is_some_and(|x| x.eq_ignore_ascii_case("png")))
+            .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+            .max_by_key(|(t, _)| *t);
+        let cover = match newest {
+            Some((_, p)) => Some(Cover { kind: "screenshot", path: p.to_string_lossy().to_string() }),
+            None => worlds_of(&state, &inst).into_iter().find_map(|w| w.icon).map(|path| Cover { kind: "world", path }),
+        };
+        if let Some(c) = cover {
+            out.insert(inst.id.clone(), c);
+        }
+    }
+    out
+}

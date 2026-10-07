@@ -193,6 +193,9 @@ export interface CapePreset {
 export interface CosmeticsStatus {
   cape: VitraCape | null;
   presets: CapePreset[];
+  /** Players in game on Vitra right now, and everyone who has used it; null when unknown. */
+  online: number | null;
+  players: number | null;
 }
 
 export interface ProfileView {
@@ -201,6 +204,12 @@ export interface ProfileView {
   skinDataUrl: string | null;
   skinModel: "classic" | "slim";
   capes: CapeView[];
+}
+
+/** The picture on an instance's library card. */
+export interface InstanceCover {
+  kind: "screenshot" | "world";
+  path: string;
 }
 
 export interface WorldInfo {
@@ -455,6 +464,20 @@ export interface ServerStatus {
 }
 
 /** A skin found by player name or link, not yet saved to the library. */
+export interface NameChangeInfo {
+  allowed: boolean;
+  /** When the name last changed (ms), if it ever did. */
+  changedAt: number | null;
+  /** When the next change is allowed (ms), while it isn't yet. */
+  nextChangeAt: number | null;
+}
+
+export interface NameCheck {
+  results: { name: string; status: "available" | "taken" | "not_allowed" | "invalid" }[];
+  /** Mojang paused answering (rate limit), so the rest weren't checked. */
+  limited: boolean;
+}
+
 export interface FoundSkin {
   name: string;
   source: "player" | "link";

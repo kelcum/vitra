@@ -26,6 +26,7 @@ export const api = {
   listWorlds: (id: string) => invoke<T.WorldInfo[]>("list_worlds", { id }),
   recentWorlds: (limit: number) => invoke<T.WorldInfo[]>("recent_worlds", { limit }),
   recentScreenshots: (limit: number) => invoke<string[]>("recent_screenshots", { limit }),
+  instanceCovers: () => invoke<Record<string, T.InstanceCover>>("instance_covers"),
   findExternalInstances: (folder: string | null) => invoke<T.ExternalInstance[]>("find_external_instances", { folder }),
   importExternalInstance: (path: string) => invoke<T.InstanceView>("import_external_instance", { path }),
 
@@ -63,6 +64,9 @@ export const api = {
   setCape: (capeId: string | null) => invoke<T.ProfileView>("set_cape", { capeId }),
   saveCurrentSkin: () => invoke<T.SavedSkin>("save_current_skin"),
   findPlayerSkin: (name: string) => invoke<T.FoundSkin>("find_player_skin", { name }),
+  nameChangeInfo: () => invoke<T.NameChangeInfo>("name_change_info"),
+  checkNames: (names: string[], want: number) => invoke<T.NameCheck>("check_names", { names, want }),
+  changeName: (name: string) => invoke<T.ProfileView>("change_name", { name }),
   fetchSkinLink: (url: string) => invoke<T.FoundSkin>("fetch_skin_link", { url }),
   saveFoundSkin: (name: string, model: string, dataUrl: string) => invoke<T.SavedSkin>("save_found_skin", { name, model, dataUrl }),
   optifineCape: () => invoke<string | null>("optifine_cape"),

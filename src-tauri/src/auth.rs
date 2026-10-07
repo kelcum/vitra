@@ -371,6 +371,18 @@ async fn refresh(state: &AppState, uuid: &str) -> Result<(String, String)> {
     Ok((token, xuid))
 }
 
+/// Keeps a saved account's name in step with Mojang (after a name change here or on minecraft.net),
+/// since the game is started with it.
+pub(crate) fn sync_account_name(state: &AppState, uuid: &str, name: &str) -> Result<()> {
+    let mut accounts = load_accounts(state);
+    let Some(account) = accounts.iter_mut().find(|a| a.uuid.replace('-', "") == uuid.replace('-', "")) else { return Ok(()) };
+    if account.name != name {
+        account.name = name.to_string();
+        save_accounts(state, &accounts)?;
+    }
+    Ok(())
+}
+
 pub(crate) fn active_account(state: &AppState) -> Option<Account> {
     let accounts = load_accounts(state);
     let active = state.settings().active_account;
