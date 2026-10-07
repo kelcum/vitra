@@ -12,6 +12,9 @@ export interface PreparedCape extends AnimatedCape {
 }
 
 const MAX_FRAMES = 48;
+/** The server's limits: capes up to 256 px wide, and at most 256×128×48 pixels across all frames. */
+const MAX_WIDTH = 256;
+const MAX_PIXELS = 256 * 128 * 48;
 
 /**
  * Which pixels of the elytra area (x 22–45, y 0–21 of a 64×32 cape texture) are wing. Everything else
@@ -182,7 +185,7 @@ function padTexture(src: HTMLCanvasElement): HTMLCanvasElement {
   return out;
 }
 
-function fitWidth(src: HTMLCanvasElement, max = 512): HTMLCanvasElement {
+function fitWidth(src: HTMLCanvasElement, max = MAX_WIDTH): HTMLCanvasElement {
   if (src.width <= max) return src;
   const out = canvas(max, max / 2);
   const g = out.getContext("2d")!;
@@ -239,6 +242,11 @@ export async function prepareCape(file: File): Promise<PreparedCape> {
 
   let frames = textures(4);
   let frameDelay = delay;
+  // Too many frames for the pixel budget: keep every other one, each shown twice as long.
+  while (frames.length > 1 && frames.length * frames[0].width * frames[0].height > MAX_PIXELS) {
+    frames = frames.filter((_, i) => i % 2 === 0);
+    frameDelay = Math.min(5000, frameDelay * 2);
+  }
   for (let attempt = 0; attempt < 8; attempt++) {
     const png = await encode(frames);
     if (png.length * 0.75 <= MAX_BYTES) return { frames, delay: Math.round(frameDelay), png };

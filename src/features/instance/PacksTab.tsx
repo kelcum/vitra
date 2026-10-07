@@ -85,7 +85,7 @@ export function ResourcePacksTab({ instance }: { instance: InstanceView }) {
           <ArchiveRestore />
         </IconButton>
       </div>
-      {instance.running && <Notice tone="warning">Changes apply the next time you start the game — Minecraft saves its own pack list when it closes.</Notice>}
+      {instance.running && <Notice tone="warning">Close the game to change resource packs. Minecraft saves its own pack list when it closes, so changes made now would be lost.</Notice>}
       {dropping && (
         <div className="drop-overlay">
           <FilePlus2 />

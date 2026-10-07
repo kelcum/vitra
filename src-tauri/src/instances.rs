@@ -158,7 +158,14 @@ pub fn list_all(state: &AppState) -> Vec<Instance> {
     let mut out = Vec::new();
     if let Ok(entries) = std::fs::read_dir(state.instances_dir()) {
         for e in entries.flatten() {
-            if let Ok(inst) = util::read_json::<Instance>(&e.path().join("instance.json")) {
+            if let Ok(mut inst) = util::read_json::<Instance>(&e.path().join("instance.json")) {
+                // The folder is the instance's identity. A folder copied by hand keeps the original's id
+                // inside, and deleting "the copy" would then delete the original's folder.
+                let folder = e.file_name().to_string_lossy().to_string();
+                if inst.id != folder {
+                    inst.id = folder;
+                    let _ = save(state, &inst);
+                }
                 out.push(inst);
             }
         }
@@ -247,12 +254,21 @@ pub fn update_instance(state: State<'_, Arc<AppState>>, instance: Instance) -> R
         || updated.loader_version != existing.loader_version
     {
         updated.installed_version = None;
+    } else {
+        updated.installed_version = existing.installed_version.clone();
     }
     // Fields owned by the launcher, not the editor.
     updated.created_at = existing.created_at;
     updated.play_time_secs = existing.play_time_secs;
     updated.last_played = existing.last_played;
+    updated.modpack = existing.modpack.clone();
+    updated.imported_from = existing.imported_from.clone();
+    let folder_changed = updated.game_dir != existing.game_dir;
     save(&state, &updated)?;
+    if folder_changed {
+        // Let the UI show world icons and screenshots from the new folder right away.
+        crate::allow_asset_dirs(&state);
+    }
     Ok(view(&state, updated))
 }
 
@@ -290,7 +306,7 @@ pub async fn duplicate_instance(state: State<'_, Arc<AppState>>, id: String, nam
 
 #[tauri::command]
 pub async fn delete_instance(state: State<'_, Arc<AppState>>, id: String) -> Result<()> {
-    if state.running.lock().unwrap().contains_key(&id) {
+    if state.in_use(&id) {
         bail!("Close the game before deleting this instance.");
     }
     let inst = load(&state, &id)?;
@@ -306,17 +322,22 @@ pub async fn delete_instance(state: State<'_, Arc<AppState>>, id: String) -> Res
     Ok(())
 }
 
-fn zip_dir(writer: &mut zip::ZipWriter<std::fs::File>, base: &Path, dir: &Path) -> Result<()> {
+/// Adds `dir` to the zip, named relative to `base` and placed under `prefix` ("" or "folder/"),
+/// leaving out `skip`.
+fn zip_dir(writer: &mut zip::ZipWriter<std::fs::File>, base: &Path, dir: &Path, prefix: &str, skip: Option<&Path>) -> Result<()> {
     let options = zip::write::SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
         .large_file(true);
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
-        let rel = path.strip_prefix(base).unwrap_or(&path).to_string_lossy().replace('\\', "/");
+        if Some(path.as_path()) == skip {
+            continue;
+        }
+        let rel = format!("{prefix}{}", path.strip_prefix(base).unwrap_or(&path).to_string_lossy().replace('\\', "/"));
         if entry.file_type()?.is_dir() {
             writer.add_directory(format!("{rel}/"), options)?;
-            zip_dir(writer, base, &path)?;
+            zip_dir(writer, base, &path, prefix, skip)?;
         } else {
             // Skip the session lock Minecraft holds while a world is open.
             if rel.ends_with("session.lock") {
@@ -344,12 +365,14 @@ pub async fn backup_instance(state: State<'_, Arc<AppState>>, id: String) -> Res
         let file = std::fs::File::create(&out)?;
         let mut writer = zip::ZipWriter::new(file);
         let dir = instance_dir(&st, &inst.id);
-        zip_dir(&mut writer, &dir, &dir)?;
-        if let Some(custom) = &inst.game_dir {
-            let custom = PathBuf::from(custom);
-            let opts = zip::write::SimpleFileOptions::default();
-            writer.add_directory("minecraft/", opts)?;
-            zip_dir(&mut writer, custom.parent().unwrap_or(&custom), &custom)?;
+        // A custom game folder goes where the default one would be (instead of it), so the backup
+        // restores the same way.
+        let custom = inst.game_dir.as_ref().filter(|d| !d.trim().is_empty()).map(PathBuf::from).filter(|c| !c.starts_with(&dir));
+        let default_game = dir.join("minecraft");
+        zip_dir(&mut writer, &dir, &dir, "", custom.as_ref().map(|_| default_game.as_path()))?;
+        if let Some(custom) = &custom {
+            writer.add_directory("minecraft/", zip::write::SimpleFileOptions::default())?;
+            zip_dir(&mut writer, custom, custom, "minecraft/", None)?;
         }
         writer.finish()?.flush()?;
         Ok(out.to_string_lossy().to_string())

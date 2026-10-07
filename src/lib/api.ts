@@ -72,6 +72,7 @@ export const api = {
   optifineCape: () => invoke<string | null>("optifine_cape"),
   openOptifineCapeEditor: () => invoke<void>("open_optifine_cape_editor"),
   cosmeticsSupported: (loader: string, gameVersion: string) => invoke<boolean>("cosmetics_supported", { loader, gameVersion }),
+  deleteVitraData: () => invoke<void>("delete_vitra_data"),
   cosmeticsStatus: () => invoke<T.CosmeticsStatus>("cosmetics_status"),
   /** A preset, an uploaded cape (base64 PNG of stacked frames), or neither to take the cape off. */
   setVitraCape: (args: { preset?: string; image?: string; frames?: number; delay?: number }) =>

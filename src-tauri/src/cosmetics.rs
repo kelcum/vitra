@@ -168,23 +168,49 @@ pub fn cosmetics_supported(state: State<'_, Arc<AppState>>, loader: String, game
 
 #[tauri::command]
 pub async fn cosmetics_status(state: State<'_, Arc<AppState>>) -> Result<CosmeticsStatus> {
-    let resp = state.http.get(format!("{API}/v1/presets")).send().await?;
+    // Three independent requests, sent together. Only the presets are required.
+    let presets = async {
+        let resp = state.http.get(format!("{API}/v1/presets")).send().await?;
+        if !resp.status().is_success() {
+            return Err(api_error(resp).await);
+        }
+        Ok::<Vec<Preset>, Error>(serde_json::from_value(resp.json::<Value>().await?["presets"].take())?)
+    };
+    let cape = async {
+        let account = auth::active_account(&state)?;
+        let resp = state.http.get(format!("{API}/v1/players/{}", account.uuid.replace('-', ""))).send().await.ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        serde_json::from_value::<Option<VitraCape>>(resp.json::<Value>().await.ok()?["cape"].take()).ok().flatten()
+    };
+    let stats = async {
+        match state.http.get(format!("{API}/v1/stats")).send().await {
+            Ok(r) if r.status().is_success() => r.json::<Value>().await.unwrap_or_default(),
+            _ => Value::Null,
+        }
+    };
+    let (presets, cape, stats) = tokio::join!(presets, cape, stats);
+    Ok(CosmeticsStatus { cape, presets: presets?, online: stats["online"].as_u64(), players: stats["players"].as_u64() })
+}
+
+/// Deletes what api.xan.gripe keeps about the signed-in player: their record, their Vitra cape and
+/// the capes they uploaded (unless someone else wears the same one).
+#[tauri::command]
+pub async fn delete_vitra_data(state: State<'_, Arc<AppState>>) -> Result<()> {
+    let (account, token) = auth::access_token(&state).await?;
+    let proof = proof(&state, &account.uuid, &token, "delete").await?;
+    let resp = state
+        .http
+        .delete(format!("{API}/v1/me"))
+        .json(&json!({ "name": account.name, "proof": proof }))
+        .send()
+        .await?;
     if !resp.status().is_success() {
         return Err(api_error(resp).await);
     }
-    let presets: Vec<Preset> = serde_json::from_value(resp.json::<Value>().await?["presets"].take())?;
-    let mut cape = None;
-    if let Some(account) = auth::active_account(&state) {
-        let resp = state.http.get(format!("{API}/v1/players/{}", account.uuid.replace('-', ""))).send().await?;
-        if resp.status().is_success() {
-            cape = serde_json::from_value(resp.json::<Value>().await?["cape"].take()).ok().flatten();
-        }
-    }
-    let stats = match state.http.get(format!("{API}/v1/stats")).send().await {
-        Ok(r) if r.status().is_success() => r.json::<Value>().await.unwrap_or_default(),
-        _ => Value::Null,
-    };
-    Ok(CosmeticsStatus { cape, presets, online: stats["online"].as_u64(), players: stats["players"].as_u64() })
+    *GAME_TOKEN.lock().unwrap() = None;
+    Ok(())
 }
 
 /// Sets the signed-in player's Vitra cape: a preset, an uploaded image (a PNG of 2:1 cape textures

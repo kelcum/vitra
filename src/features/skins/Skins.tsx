@@ -8,6 +8,7 @@ import { Segmented, Select, Slider, TextInput, Toggle } from "../../components/u
 import { Empty, Notice, Skeleton } from "../../components/ui/Feedback";
 import { Menu, Modal } from "../../components/ui/Overlay";
 import { api, errorMessage, parseError } from "../../lib/api";
+import { forgetAccountData } from "../../lib/cache";
 import { useContentVersion } from "../../lib/events";
 import { toast, useAccounts, useActiveAccount, useDialogs, useSelectedInstance, useSettings } from "../../lib/store";
 import type { FoundSkin, ProfileView, SavedSkin } from "../../lib/types";
@@ -137,6 +138,7 @@ export default function Skins() {
     setBusy(skin.id);
     try {
       const p = await api.applySkin(skin.id);
+      forgetAccountData();
       setProfile(p);
       if (p.skinDataUrl) {
         try {
@@ -157,6 +159,7 @@ export default function Skins() {
     setBusy("cape");
     try {
       const p = await api.setCape(capeId);
+      forgetAccountData();
       setProfile(p);
       toast.success(capeId ? "Cape equipped" : "Cape hidden");
     } catch (e) {

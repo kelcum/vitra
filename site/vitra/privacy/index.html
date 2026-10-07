@@ -28,11 +28,11 @@
 
 <main class="legal">
   <h1><span class="gradient-text">Privacy statement</span></h1>
-  <p class="updated">Last updated October 6, 2026</p>
+  <p class="updated">Last updated October 7, 2026</p>
 
   <div class="glass">
     <h2>The short version</h2>
-    <p>Vitra runs on your computer. It has no accounts of its own, no servers of its own, and no analytics, ads or telemetry. It only talks to the services it needs to install and launch Minecraft, and only when you use the feature that needs them.</p>
+    <p>Vitra runs on your computer. It has no accounts of its own and no analytics, ads or telemetry. It talks to the services it needs to install and launch Minecraft, only when you use the feature that needs them, and to one server of its own, <code>api.xan.gripe</code>, which runs the Vitra badges and capes. That server, and the Discord status, can be turned off in Settings.</p>
 
     <h2>What stays on your computer</h2>
     <ul>
@@ -41,7 +41,7 @@
       <li><strong>Settings, instances, worlds, mods, skins and your server list.</strong></li>
       <li><strong>Logs</strong>, for troubleshooting. Access tokens are removed from launch records before they're written.</li>
     </ul>
-    <p>None of this is uploaded anywhere by Vitra.</p>
+    <p>Apart from what Vitra badges and capes need (below), none of this leaves your computer.</p>
 
     <h2>What is sent where</h2>
     <ul>
@@ -53,7 +53,9 @@
       <li><strong>OptiFine</strong> (<code>optifine.net</code>), to show your OptiFine cape, which is looked up by your player name. When you choose <em>Edit</em>, Vitra opens OptiFine's cape editor after a Mojang session check, so OptiFine never receives your token.</li>
       <li><strong>Skin search</strong>: player names you search go to Mojang's public profile API, and skin links you paste are downloaded from the site in the link.</li>
       <li><strong>xan.gripe</strong>, to check for a newer Vitra. Only a small version file is downloaded, and an update is only installed when you choose to.</li>
-      <li><strong>Vitra cosmetics</strong> (<code>api.xan.gripe</code>), when <em>Vitra badges and capes</em> is on (Settings → Launcher). To prove you own your account, Vitra sends your player name and UUID with the chat-signing key Mojang gives every account, never your token or password. While you play a Fabric 26.3 instance, the game tells it about once a minute that you're on Vitra, and asks which players around you use Vitra and which cape they wear, by their UUIDs. A cape you upload is stored there and shown to other Vitra players. The home screen also asks it how many people use Vitra and how many are playing right now (just two numbers; nothing about you is sent).</li>
+      <li><strong>Vitra badges and capes</strong> (<code>api.xan.gripe</code>, run by Vitra's developer). This is on unless you turn off <em>Vitra badges and capes</em> in Settings → Launcher. To prove the account is yours, Vitra sends your player name and UUID with the chat-signing key Mojang gives every account, never your token or password. While you play a Fabric 26.3 instance, the game tells it about once a minute that you're on Vitra, and asks which players in your tab list use Vitra, by their UUIDs; those UUIDs are only looked up, not stored. A cape you upload is stored there and shown to other players. The home screen also asks how many people use Vitra and how many are playing right now (just two numbers; nothing about you is sent).
+        <br><br>What the server keeps about you: your UUID, your player name as Vitra sent it, when you last played on Vitra, your Vitra cape and the capes you uploaded. Vitra players in game can see whether you use Vitra and whether you're playing on it right now; anyone can see which Vitra cape a player wears. It stays until you delete it (see below).</li>
+      <li><strong>Discord</strong>, when <em>Discord status</em> is on (Settings → Launcher) and the Discord app is running. Vitra tells the Discord app on your computer that you're using Vitra, which version, what you're playing and, if <em>Show the server you're on</em> is on, that server's name and player count. Discord shows this on your profile to the people who can see your activity, under Discord's own privacy settings. The player count comes from the same status request the Servers page sends.</li>
       <li><strong>Minecraft servers on the Servers page</strong>, which receive a standard status request, the same one the game's multiplayer screen sends, so Vitra can show player counts and ping.</li>
     </ul>
     <p>These services receive what any connection includes, such as your IP address, and handle it under their own privacy policies. When you launch the game, Minecraft itself connects to Mojang and to the servers you join.</p>
@@ -61,12 +63,13 @@
     <h2>What is never collected</h2>
     <ul>
       <li>Your Microsoft password.</li>
-      <li>Usage statistics, crash reports or device identifiers. Nothing is sent to the developer.</li>
+      <li>Usage statistics, crash reports or device identifiers. The developer's server only gets the badge and cape data described above.</li>
       <li>Anything for advertising. Vitra has no ads and shares no data with advertisers.</li>
     </ul>
 
     <h2>Removing your data</h2>
     <p>Signing out in Vitra deletes that account's tokens from your computer. Uninstalling Vitra and deleting its data folder (<code>%APPDATA%\app.vitra.launcher</code>) removes everything else, along with your game folder if you moved it in Settings. You can also revoke Vitra's access to your Microsoft account at any time at <a href="https://account.live.com/consent/Manage">account.live.com/consent/Manage</a>.</p>
+    <p>To delete what Vitra's server keeps about you, open Settings → Launcher and choose <em>Delete</em> next to <em>Your Vitra cosmetics data</em>. Your record, your Vitra cape and the capes you uploaded are removed at once; a deleted cape image can stay in caches for up to a day.</p>
 
     <h2>Changes</h2>
     <p>If Vitra starts handling data differently, this page will be updated first and the date above will change.</p>

@@ -339,7 +339,13 @@ fn demo_uuid(seed: &str) -> String {
     chars.into_iter().collect()
 }
 
+/// One refresh at a time: two at once would each save what they got, and the later save could put
+/// back a refresh token Microsoft has already replaced.
+static REFRESH_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 async fn refresh(state: &AppState, uuid: &str) -> Result<(String, String)> {
+    let _one_at_a_time = REFRESH_LOCK.lock().await;
+    // Read after taking the lock, so a refresh that just finished is seen.
     let mut secrets = load_secrets(state);
     let Some(secret) = secrets.get(uuid).cloned() else {
         bail!("SIGN_IN_AGAIN: This account's sign-in expired. Remove it and sign in again.");
@@ -357,11 +363,22 @@ async fn refresh(state: &AppState, uuid: &str) -> Result<(String, String)> {
             ("scope", SCOPE),
         ])
         .send()
-        .await?;
-    if !resp.status().is_success() {
-        bail!("SIGN_IN_AGAIN: Microsoft asked you to sign in again. Remove the account and add it back.");
+        .await
+        .map_err(|e| Error::Msg(format!("Couldn't reach Microsoft to refresh your sign-in: {e}")))?;
+    let status = resp.status();
+    if !status.is_success() {
+        // Only a refused refresh token means signing in again; outages and rate limits pass.
+        let body: serde_json::Value = resp.json().await.unwrap_or_default();
+        let code = body["error"].as_str().unwrap_or_default();
+        if matches!(code, "invalid_grant" | "interaction_required" | "consent_required" | "login_required") {
+            bail!("SIGN_IN_AGAIN: Microsoft asked you to sign in again. Remove the account and add it back.");
+        }
+        bail!("Microsoft's sign-in service isn't answering right now ({status}). Try again in a minute.");
     }
     let msa: MsaTokens = resp.json().await?;
+    // Keep the new refresh token even if a step below fails: Microsoft may have retired the old one.
+    secrets.insert(uuid.to_string(), Secret { msa_refresh: msa.refresh_token.clone(), ..secret });
+    save_secrets(state, &secrets)?;
     let (token, expires_at, xuid) = xbox_chain(&state.http, &msa.access_token).await?;
     secrets.insert(
         uuid.to_string(),
@@ -369,6 +386,11 @@ async fn refresh(state: &AppState, uuid: &str) -> Result<(String, String)> {
     );
     save_secrets(state, &secrets)?;
     Ok((token, xuid))
+}
+
+/// The last saved Minecraft token, even an expired one.
+fn saved_token(state: &AppState, uuid: &str) -> Option<(String, String)> {
+    load_secrets(state).get(uuid).map(|s| (s.mc_token.clone(), s.xuid.clone()))
 }
 
 /// Keeps a saved account's name in step with Mojang (after a name change here or on minecraft.net),
@@ -431,7 +453,19 @@ pub async fn launch_identity(state: &AppState, demo: bool) -> Result<Identity> {
         }),
         None => bail!("NO_ACCOUNT: Sign in with a Microsoft account to play, or start the free demo."),
         Some(account) => {
-            let (token, xuid) = refresh(state, &account.uuid).await?;
+            let (token, xuid) = match refresh(state, &account.uuid).await {
+                Ok(fresh) => fresh,
+                // Offline, or Microsoft is down: start with the last token anyway. Singleplayer works
+                // without a valid one; servers will ask for a fresh sign-in.
+                Err(e) if !e.to_string().starts_with("SIGN_IN_AGAIN") => match saved_token(state, &account.uuid) {
+                    Some(saved) => {
+                        log::warn!("Couldn't refresh the sign-in ({e}); starting with the last saved one.");
+                        saved
+                    }
+                    None => return Err(e),
+                },
+                Err(e) => return Err(e),
+            };
             if !account.owns_game && !demo {
                 bail!("NOT_OWNED: {} doesn't own Minecraft: Java Edition. You can play the free demo instead.", account.name);
             }

@@ -269,10 +269,8 @@ async function installProject(
     toast.info(`Installing ${title}`, "A new instance is being created. Progress is shown in Downloads.");
     api
       .installModpack(projectId, versionId ?? null, title, iconUrl)
-      .then((inst) => {
-        useInstances.getState().refresh();
-        toast.success(`${inst.name} is ready to play`);
-      })
+      // The finished install task says when it's ready.
+      .then(() => useInstances.getState().refresh())
       .catch((e) => toast.error(`Couldn't install ${title}`, errorMessage(e)));
     return;
   }

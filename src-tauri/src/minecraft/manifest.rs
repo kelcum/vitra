@@ -316,6 +316,11 @@ impl VersionJson {
         let mut seen = HashSet::new();
         let mut libraries = Vec::new();
         for lib in self.libraries.into_iter().chain(parent.libraries) {
+            // Rules first: some versions list a library once per OS (LWJGL on 1.14–1.18), and the copy
+            // for another OS mustn't win the de-duplication below.
+            if !lib.is_allowed() {
+                continue;
+            }
             let key = util::maven_key(&lib.name);
             // Keep natives of the same artifact distinct from the main jar.
             let key = if lib.natives.is_some() { format!("{key}#natives") } else { key };

@@ -172,8 +172,16 @@ pub async fn get_profile(state: State<'_, Arc<AppState>>) -> Result<ProfileView>
     let Some(profile) = auth::fetch_profile(&state.http, &token).await? else {
         bail!("This account has no Minecraft profile (it doesn't own Java Edition).");
     };
-    auth::sync_account_name(&state, &profile.id, &profile.name)?;
+    keep_account_name(&state, &profile);
     Ok(profile_view(&state, profile).await)
+}
+
+/// Saves the profile's name to the account list. Not saving it only means an older name until the
+/// next profile read, so a failed write mustn't fail the Mojang request that already worked.
+fn keep_account_name(state: &AppState, profile: &McProfile) {
+    if let Err(e) = auth::sync_account_name(state, &profile.id, &profile.name) {
+        log::warn!("Couldn't save the account name: {e}");
+    }
 }
 
 /// Uploads a saved skin to the account. It shows up in-game everywhere.
@@ -271,8 +279,8 @@ pub async fn name_change_info(state: State<'_, Arc<AppState>>) -> Result<NameCha
 #[derive(Debug, Serialize)]
 pub struct NameStatus {
     pub name: String,
-    /// "available", "taken", "not_allowed" (blocked by Mojang) or "invalid" (not 3–16 letters,
-    /// numbers or underscores).
+    /// "available", "taken", "not_allowed" (blocked by Mojang), "invalid" (not 3–16 letters,
+    /// numbers or underscores) or "unknown" (Mojang didn't answer for this one).
     pub status: &'static str,
 }
 
@@ -283,23 +291,25 @@ pub struct NameCheck {
     pub limited: bool,
 }
 
-/// `None` when Mojang is rate-limiting.
-async fn name_status(http: &reqwest::Client, token: &str, name: &str) -> Result<Option<&'static str>> {
+/// A name's status (see `NameStatus`), or `None` when Mojang is rate-limiting. A failed check is
+/// "unknown" instead of an error, so one hiccup doesn't throw away the names already checked.
+async fn name_status(http: &reqwest::Client, token: &str, name: &str) -> Option<&'static str> {
     if !valid_new_name(name) {
-        return Ok(Some("invalid"));
+        return Some("invalid");
     }
-    let resp = http.get(format!("{MC_API}/minecraft/profile/name/{name}/available")).bearer_auth(token).send().await?;
+    let url = format!("{MC_API}/minecraft/profile/name/{name}/available");
+    let Ok(resp) = http.get(url).bearer_auth(token).send().await else { return Some("unknown") };
     match resp.status().as_u16() {
         200 => {}
-        429 => return Ok(None),
-        s => bail!("Mojang's name check isn't answering right now ({s})."),
+        429 => return None,
+        _ => return Some("unknown"),
     }
-    let body: serde_json::Value = resp.json().await?;
-    Ok(Some(match body["status"].as_str() {
+    let Ok(body) = resp.json::<serde_json::Value>().await else { return Some("unknown") };
+    Some(match body["status"].as_str() {
         Some("AVAILABLE") => "available",
         Some("DUPLICATE") => "taken",
         _ => "not_allowed",
-    }))
+    })
 }
 
 /// Checks names in order, a few at a time, until `want` free ones turn up (or the list ends).
@@ -311,7 +321,7 @@ pub async fn check_names(state: State<'_, Arc<AppState>>, names: Vec<String>, wa
     for chunk in names.chunks(4) {
         let checks = futures_util::future::join_all(chunk.iter().map(|n| name_status(&state.http, &token, n))).await;
         for (name, status) in chunk.iter().zip(checks) {
-            match status? {
+            match status {
                 Some(status) => results.push(NameStatus { name: name.clone(), status }),
                 None => limited = true,
             }
@@ -319,6 +329,9 @@ pub async fn check_names(state: State<'_, Arc<AppState>>, names: Vec<String>, wa
         if limited || results.iter().filter(|r| r.status == "available").count() >= want.max(1) {
             break;
         }
+    }
+    if !results.is_empty() && results.iter().all(|r| r.status == "unknown") {
+        bail!("Mojang's name check isn't answering right now. Try again in a minute.");
     }
     Ok(NameCheck { results, limited })
 }
@@ -344,7 +357,7 @@ pub async fn change_name(state: State<'_, Arc<AppState>>, name: String) -> Resul
         }
     }
     let profile: McProfile = resp.json().await?;
-    auth::sync_account_name(&state, &profile.id, &profile.name)?;
+    keep_account_name(&state, &profile);
     Ok(profile_view(&state, profile).await)
 }
 

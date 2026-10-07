@@ -62,6 +62,10 @@ pub struct Settings {
     pub notifications: Notifications,
     /// Vitra badges and capes in Fabric instances (adds the Vitra Cosmetics mod at launch).
     pub cosmetics: bool,
+    /// Show Vitra and what you're playing on your Discord profile.
+    pub discord_presence: bool,
+    /// Name the server you're on in that status.
+    pub discord_show_server: bool,
 
     // Game defaults
     pub game_data_dir: Option<String>,
@@ -100,6 +104,8 @@ impl Default for Settings {
             check_updates: true,
             notifications: Notifications::default(),
             cosmetics: true,
+            discord_presence: true,
+            discord_show_server: true,
             game_data_dir: None,
             download_concurrency: 16,
             default_memory_mb: recommended_memory_mb(false),
@@ -182,6 +188,7 @@ pub fn save_settings(state: State<'_, Arc<AppState>>, settings: Settings) -> Res
         let _ = std::fs::remove_file(probe);
     }
     state.replace_settings(settings.clone())?;
+    state.presence.poke();
     if dir_changed {
         crate::allow_asset_dirs(&state);
     }

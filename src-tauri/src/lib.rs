@@ -7,6 +7,7 @@
 mod auth;
 mod content;
 mod cosmetics;
+mod discord;
 mod error;
 mod importer;
 mod instances;
@@ -17,6 +18,7 @@ mod modrinth;
 mod net;
 mod optifine;
 mod packs;
+mod presence;
 mod servers;
 mod settings;
 mod skins;
@@ -61,6 +63,7 @@ pub fn run() {
             let root = app.path().app_data_dir()?;
             let state = AppState::new(app.handle().clone(), root)?;
             allow_asset_dirs(&state);
+            presence::start(state.clone());
             app.manage::<Arc<AppState>>(state);
             Ok(())
         })
@@ -133,6 +136,7 @@ pub fn run() {
             cosmetics::cosmetics_supported,
             cosmetics::cosmetics_status,
             cosmetics::set_vitra_cape,
+            cosmetics::delete_vitra_data,
             // modrinth & content
             modrinth::modrinth_search,
             modrinth::modrinth_project,
@@ -174,6 +178,13 @@ pub fn run() {
             system::storage_info,
             system::clear_cache,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Vitra");
+        .build(tauri::generate_context!())
+        .expect("error while running Vitra")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(state) = app.try_state::<Arc<AppState>>() {
+                    tauri::async_runtime::block_on(presence::shutdown(&state));
+                }
+            }
+        });
 }

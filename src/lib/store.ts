@@ -15,12 +15,15 @@ import type {
 // ------------------------------------------------------------------ settings
 
 let saveTimer: number | undefined;
+/** Edits made since the last save. */
+let unsaved: Partial<Settings> = {};
 
 interface SettingsStore {
   settings: Settings | null;
   load: () => Promise<Settings>;
   update: (patch: Partial<Settings>) => void;
   replace: (s: Settings) => void;
+  external: (s: Settings) => void;
 }
 
 export const useSettings = create<SettingsStore>((set, get) => ({
@@ -36,12 +39,20 @@ export const useSettings = create<SettingsStore>((set, get) => ({
     const cur = get().settings;
     if (!cur) return;
     const next = { ...cur, ...patch };
+    unsaved = { ...unsaved, ...patch };
     applyAppearance(next);
     set({ settings: next });
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => {
-      api.saveSettings(next).catch((e) => toast.error("Couldn't save settings", errorMessage(e)));
+      unsaved = {};
+      api.saveSettings(get().settings ?? next).catch((e) => toast.error("Couldn't save settings", errorMessage(e)));
     }, 250);
+  },
+  // Settings the backend changed: take them, keeping edits that are still waiting to be saved.
+  external: (s) => {
+    const next = { ...s, ...unsaved };
+    applyAppearance(next);
+    set({ settings: next });
   },
   replace: (s) => {
     applyAppearance(s);
@@ -200,11 +211,22 @@ export const useToasts = create<ToastStore>((set, get) => ({
   dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));
 
+// A failing background task reports its error, and so does the screen that started it. The same
+// error text within a few seconds is shown once.
+const recentErrors = new Map<string, number>();
+const ERROR_REPEAT_MS = 4000;
+
 export const toast = {
   info: (title: string, body?: string) => useToasts.getState().push({ kind: "info", title, body }),
   success: (title: string, body?: string) => useToasts.getState().push({ kind: "success", title, body }),
   warning: (title: string, body?: string) => useToasts.getState().push({ kind: "warning", title, body }),
-  error: (title: string, body?: string) => useToasts.getState().push({ kind: "error", title, body }),
+  error: (title: string, body?: string) => {
+    const key = body || title;
+    const now = Date.now();
+    if (now - (recentErrors.get(key) ?? 0) < ERROR_REPEAT_MS) return;
+    recentErrors.set(key, now);
+    useToasts.getState().push({ kind: "error", title, body });
+  },
 };
 
 // ------------------------------------------------------------------ dialogs
