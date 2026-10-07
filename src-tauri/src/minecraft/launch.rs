@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager, State};
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::sync::mpsc;
 
 use crate::auth::{self, Identity};
@@ -385,10 +385,50 @@ fn set_window_for_game(state: &AppState, running: bool) {
     }
 }
 
-pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Result<()> {
-    if state.running.lock().unwrap().contains_key(&id) {
+/// Holds an instance's place from "Play" until its game is running (or the launch fails).
+struct LaunchSlot<'a> {
+    state: &'a AppState,
+    id: String,
+}
+
+impl Drop for LaunchSlot<'_> {
+    fn drop(&mut self) {
+        self.state.launching.lock().unwrap().remove(&self.id);
+    }
+}
+
+fn reserve<'a>(state: &'a AppState, id: &str) -> Result<LaunchSlot<'a>> {
+    let mut launching = state.launching.lock().unwrap();
+    if state.running.lock().unwrap().contains_key(id) {
         bail!("This instance is already running.");
     }
+    if !launching.insert(id.to_string()) {
+        bail!("This instance is already starting.");
+    }
+    Ok(LaunchSlot { state, id: id.to_string() })
+}
+
+/// Reads a game output stream line by line. Bytes that aren't UTF-8 are replaced rather than ending
+/// the read: a reader that stops would let the pipe fill up and freeze the game.
+async fn read_lines(stream: impl AsyncRead + Unpin, mut on_line: impl FnMut(String)) {
+    let mut reader = BufReader::new(stream);
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        match reader.read_until(b'\n', &mut buf).await {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {
+                while matches!(buf.last(), Some(b'\n' | b'\r')) {
+                    buf.pop();
+                }
+                on_line(String::from_utf8_lossy(&buf).into_owned());
+            }
+        }
+    }
+}
+
+pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Result<()> {
+    let _slot = reserve(&state, &id)?;
     let inst = instances::load(&state, &id)?;
     let task = state.tasks.start("launch", format!("Launching {}", inst.name), Some(id.clone()));
 
@@ -426,6 +466,7 @@ pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Re
     let started_at = util::now_millis();
     let (kill_tx, mut kill_rx) = tokio::sync::watch::channel(false);
     state.running.lock().unwrap().insert(id.clone(), RunningGame { pid, started_at, kill: kill_tx });
+    state.presence.game_started(&inst, started_at);
     let _ = state.app.emit("game://started", serde_json::json!({ "instanceId": id, "pid": pid }));
     set_window_for_game(&state, true);
 
@@ -434,29 +475,30 @@ pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Re
     if let Some(out) = child.stdout.take() {
         let tx = tx.clone();
         tauri::async_runtime::spawn(async move {
-            let mut lines = BufReader::new(out).lines();
             let mut parser = LogParser { buf: None };
-            while let Ok(Some(line)) = lines.next_line().await {
+            read_lines(out, |line| {
                 if let Some(l) = parser.feed(&line) {
                     let _ = tx.send(l);
                 }
-            }
+            })
+            .await;
         });
     }
     if let Some(err) = child.stderr.take() {
         let tx = tx.clone();
         tauri::async_runtime::spawn(async move {
-            let mut lines = BufReader::new(err).lines();
-            while let Ok(Some(line)) = lines.next_line().await {
+            read_lines(err, |line| {
                 let level = if line.contains("WARN") { "WARN" } else { "ERROR" };
                 let _ = tx.send(LogLine { level: level.into(), thread: None, text: line, time: util::now_millis() });
-            }
+            })
+            .await;
         });
     }
     drop(tx);
 
     let app = state.app.clone();
     let log_id = id.clone();
+    let log_state = state.clone();
     let tail_handle = tauri::async_runtime::spawn(async move {
         let mut tail: Vec<String> = Vec::new();
         let mut batch: Vec<LogLine> = Vec::new();
@@ -465,6 +507,7 @@ pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Re
             tokio::select! {
                 line = rx.recv() => match line {
                     Some(l) => {
+                        log_state.presence.game_log(&log_id, &l.text);
                         tail.push(l.text.clone());
                         if tail.len() > 40 { tail.remove(0); }
                         batch.push(l);
@@ -490,20 +533,27 @@ pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Re
     let st = state.clone();
     tauri::async_runtime::spawn(async move {
         let mut killed = false;
+        // Once the stop button's sender is gone, `changed()` fails at once on every call: stop
+        // listening for it then, or this loop would spin.
+        let mut can_stop = true;
         let status = loop {
             tokio::select! {
                 status = child.wait() => break status.ok(),
-                changed = kill_rx.changed() => {
-                    if changed.is_ok() && *kill_rx.borrow() {
-                        killed = true;
-                        let _ = child.kill().await;
+                changed = kill_rx.changed(), if can_stop => match changed {
+                    Ok(()) => {
+                        if *kill_rx.borrow() {
+                            killed = true;
+                            let _ = child.kill().await;
+                        }
                     }
-                }
+                    Err(_) => can_stop = false,
+                },
             }
         };
         let tail = tail_handle.await.unwrap_or_default();
         let played_secs = ((util::now_millis() - started_at) / 1000).max(0) as u64;
         st.running.lock().unwrap().remove(&id);
+        st.presence.game_exited(&id);
 
         if let Ok(mut inst) = instances::load(&st, &id) {
             inst.last_played = Some(util::now_millis());

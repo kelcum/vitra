@@ -44,7 +44,6 @@ export function ImportLauncherDialog({ open, onClose }: { open: boolean; onClose
     try {
       const inst = await api.importExternalInstance(ext.path);
       await refresh();
-      toast.success(`Imported ${inst.name}`, "Downloading any missing game files…");
       navigate("instance", { id: inst.id });
       await api.installInstance(inst.id, false);
     } catch (e) {

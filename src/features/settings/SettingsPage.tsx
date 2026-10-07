@@ -27,7 +27,8 @@ import { ConfirmDialog } from "../../components/ui/Overlay";
 import { api, errorMessage } from "../../lib/api";
 import { ACCENTS, AUTO_ACCENT, resolvedAccent } from "../../lib/appearance";
 import { cx, formatMb, LOADER_LABEL } from "../../lib/format";
-import { toast, useAccounts, useDialogs, useInstances, useSettings } from "../../lib/store";
+import { forgetAccountData } from "../../lib/cache";
+import { toast, useAccounts, useActiveAccount, useDialogs, useInstances, useSettings } from "../../lib/store";
 import type { Background, GameVersion, JavaInstall, Loader, Settings, StorageInfo } from "../../lib/types";
 import "./settings.css";
 
@@ -248,9 +249,34 @@ function Launcher({ s, update }: SectionProps) {
       </Field>
       <Field
         label="Vitra badges and capes"
-        description="In Fabric instances, shows the Vitra badge next to players using Vitra and everyone's Vitra capes. Others on Vitra see yours too."
+        description={
+          <>
+            In Fabric 26.3 instances, shows the Vitra badge next to players using Vitra and everyone's Vitra capes, and
+            yours to them. Uses Vitra's server, api.xan.gripe: it gets your player name and UUID, and while you play,
+            that you're on Vitra and the UUIDs of players around you.{" "}
+            <a
+              href="https://xan.gripe/vitra/privacy/"
+              onClick={(e) => {
+                e.preventDefault();
+                api.openUrl("https://xan.gripe/vitra/privacy/");
+              }}
+            >
+              Privacy
+            </a>
+          </>
+        }
       >
         <Toggle checked={s.cosmetics} onChange={(v) => update({ cosmetics: v })} />
+      </Field>
+      <VitraDataField />
+      <Field
+        label="Discord status"
+        description="Shows on your Discord profile that you're using Vitra, and what you're playing. Needs the Discord app running; turning this off clears it."
+      >
+        <Toggle checked={s.discordPresence} onChange={(v) => update({ discordPresence: v })} />
+      </Field>
+      <Field label="Show the server you're on" description="Adds the server's name and player count to your Discord status. Off: it just says you're on a server.">
+        <Toggle checked={s.discordShowServer} onChange={(v) => update({ discordShowServer: v })} disabled={!s.discordPresence} />
       </Field>
     </>
   );
@@ -659,5 +685,46 @@ function About() {
         }}
       />
     </>
+  );
+}
+
+/** Deletes what Vitra's cosmetics server keeps about the signed-in player. */
+function VitraDataField() {
+  const account = useActiveAccount();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (!account) return null;
+  return (
+    <Field
+      label="Your Vitra cosmetics data"
+      description="Deletes your record on api.xan.gripe: your name and UUID, when you last played on Vitra, your Vitra cape and the capes you uploaded."
+    >
+      <Button size="sm" variant="danger" icon={<Trash2 />} onClick={() => setConfirming(true)}>
+        Delete
+      </Button>
+      <ConfirmDialog
+        open={confirming}
+        danger
+        icon={<Trash2 />}
+        title="Delete your Vitra cosmetics data?"
+        description={`Removes ${account.name}'s record from Vitra's server, including your Vitra cape and uploaded capes. If badges and capes stay on, a new record is made the next time you play a Fabric 26.3 instance, without a cape.`}
+        confirmLabel="Delete"
+        busy={busy}
+        onClose={() => setConfirming(false)}
+        onConfirm={async () => {
+          setBusy(true);
+          try {
+            await api.deleteVitraData();
+            forgetAccountData();
+            toast.success("Your Vitra cosmetics data is deleted");
+            setConfirming(false);
+          } catch (e) {
+            toast.error("Couldn't delete your data", errorMessage(e));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
+    </Field>
   );
 }

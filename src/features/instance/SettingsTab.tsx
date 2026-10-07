@@ -24,8 +24,16 @@ export function SettingsTab({ instance }: { instance: InstanceView }) {
   const [sys, setSys] = useState<SystemInfo | null>(null);
   const [javas, setJavas] = useState<JavaInstall[]>([]);
   const timer = useRef<number>(undefined);
+  // Only what was edited here is saved, on top of the instance as it is now: the version section and
+  // the launcher (say, the loader version picked at first launch) change it too.
+  const pending = useRef<Partial<Instance> | null>(null);
+  const latest = useRef(instance);
+  latest.current = instance;
 
-  useEffect(() => setDraft(strip(instance)), [instance.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Follow outside changes, unless an edit is still waiting to be saved.
+  useEffect(() => {
+    if (!pending.current) setDraft(strip(instance));
+  }, [instance]);
   useEffect(() => {
     api.systemInfo().then(setSys).catch(() => {});
     api.listJava().then(setJavas).catch(() => {});
@@ -33,12 +41,15 @@ export function SettingsTab({ instance }: { instance: InstanceView }) {
 
   /** Auto-saves (debounced) everything except version changes. */
   const save = (patch: Partial<Instance>) => {
-    const next = { ...draft, ...patch };
-    setDraft(next);
+    setDraft((d) => ({ ...d, ...patch }));
+    pending.current = { ...pending.current, ...patch };
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(async () => {
+      const changes = pending.current;
+      pending.current = null;
+      if (!changes) return;
       try {
-        await api.updateInstance(next);
+        await api.updateInstance({ ...strip(latest.current), ...changes });
         await refresh();
       } catch (e) {
         toast.error("Couldn't save", errorMessage(e));
@@ -140,17 +151,9 @@ export function SettingsTab({ instance }: { instance: InstanceView }) {
           <Toggle checked={draft.window.custom} onChange={(v) => save({ window: { ...draft.window, custom: v } })} />
           {draft.window.custom && (
             <>
-              <TextInput
-                value={String(draft.window.width)}
-                onChange={(v) => save({ window: { ...draft.window, width: Math.max(320, Number(v.replace(/\D/g, "")) || 0) } })}
-                style={{ width: 84 }}
-              />
+              <SizeInput value={draft.window.width} min={320} onChange={(width) => save({ window: { ...draft.window, width } })} />
               <span className="t-faint">×</span>
-              <TextInput
-                value={String(draft.window.height)}
-                onChange={(v) => save({ window: { ...draft.window, height: Math.max(240, Number(v.replace(/\D/g, "")) || 0) } })}
-                style={{ width: 84 }}
-              />
+              <SizeInput value={draft.window.height} min={240} onChange={(height) => save({ window: { ...draft.window, height } })} />
             </>
           )}
         </Field>
@@ -193,6 +196,29 @@ export function SettingsTab({ instance }: { instance: InstanceView }) {
         </Field>
       </section>
     </div>
+  );
+}
+
+/** A pixel size you can type freely; it's checked against `min` when you leave the box. */
+function SizeInput({ value, min, onChange }: { value: number; min: number; onChange: (v: number) => void }) {
+  const [text, setText] = useState(String(value));
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!editing) setText(String(value));
+  }, [value, editing]);
+  return (
+    <TextInput
+      value={text}
+      onChange={(v) => setText(v.replace(/\D/g, "").slice(0, 5))}
+      onFocus={() => setEditing(true)}
+      onBlur={() => {
+        setEditing(false);
+        const n = Math.max(min, Number(text) || 0);
+        setText(String(n));
+        if (n !== value) onChange(n);
+      }}
+      style={{ width: 84 }}
+    />
   );
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { resolvedMotion } from "../../lib/appearance";
+import { cached, remember } from "../../lib/cache";
 import { useActiveAccount, useNav, useSettings } from "../../lib/store";
 import type { ProfileView, VitraCape } from "../../lib/types";
 import { defaultSkin, SkinViewer3D } from "../skins/SkinViewer3D";
@@ -8,7 +9,6 @@ import { loadVitraCape, type AnimatedCape } from "../skins/vitraCape";
 
 // Coming back to Home shouldn't ask Mojang for the skin every time.
 const PROFILE_TTL_MS = 2 * 60 * 1000;
-let profileCache: { uuid: string; at: number; profile: ProfileView } | null = null;
 
 /**
  * You, on the Home screen: your skin wearing your Vitra cape (else your Mojang cape), slowly
@@ -20,19 +20,20 @@ export default function HeroPlayer({ vitraCape }: { vitraCape: VitraCape | null 
   const motion = useSettings((s) => (s.settings ? resolvedMotion(s.settings) : "full"));
   const navigate = useNav((s) => s.navigate);
   const [profile, setProfile] = useState<ProfileView | null>(() =>
-    account && profileCache?.uuid === account.uuid ? profileCache.profile : null,
+    account ? (cached<ProfileView>("profile", account.uuid, PROFILE_TTL_MS) ?? null) : null,
   );
   const [animated, setAnimated] = useState<AnimatedCape | null>(null);
   const fallback = useMemo(() => defaultSkin(accent), [accent]);
 
   useEffect(() => {
     if (!account) return setProfile(null);
-    if (profileCache?.uuid === account.uuid && Date.now() - profileCache.at < PROFILE_TTL_MS) return setProfile(profileCache.profile);
+    const saved = cached<ProfileView>("profile", account.uuid, PROFILE_TTL_MS);
+    if (saved) return setProfile(saved);
     let live = true;
     api
       .getProfile()
       .then((p) => {
-        profileCache = { uuid: account.uuid, at: Date.now(), profile: p };
+        remember("profile", account.uuid, p);
         if (live) setProfile(p);
       })
       .catch(() => {});
@@ -43,7 +44,15 @@ export default function HeroPlayer({ vitraCape }: { vitraCape: VitraCape | null 
 
   useEffect(() => {
     setAnimated(null);
-    if (vitraCape) loadVitraCape(vitraCape).then(setAnimated).catch(() => {});
+    if (!vitraCape) return;
+    // Only the latest cape may land: an older one finishing late would otherwise replace it.
+    let live = true;
+    loadVitraCape(vitraCape)
+      .then((a) => live && setAnimated(a))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
   }, [vitraCape?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cape = animated ?? profile?.capes.find((c) => c.active)?.dataUrl ?? null;

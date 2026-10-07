@@ -36,6 +36,7 @@ import {
   useTasks,
 } from "../../lib/store";
 import type { CosmeticsStatus, InstanceView, PatchNote, TextBlock, VitraCape, WorldInfo } from "../../lib/types";
+import { cached, remember } from "../../lib/cache";
 import { useWheelScrollX } from "../../lib/wheel";
 import { CapeThumb } from "../skins/VitraCapePanel";
 import { loadVitraCape, type AnimatedCape } from "../skins/vitraCape";
@@ -358,13 +359,12 @@ function RecentWorlds() {
 
 // Vitra's numbers change slowly; one request a minute is plenty, however often Home opens.
 const STATUS_TTL_MS = 60 * 1000;
-let statusCache: { key: string; at: number; value: CosmeticsStatus } | null = null;
 
 /** Your Vitra cape plus how many people play on Vitra. undefined while loading. */
 function useVitraStatus(): CosmeticsStatus | "error" | undefined {
   const account = useActiveAccount();
   const key = account?.uuid ?? "";
-  const fresh = statusCache?.key === key && Date.now() - statusCache.at < STATUS_TTL_MS ? statusCache.value : undefined;
+  const fresh = cached<CosmeticsStatus>("vitra-status", key, STATUS_TTL_MS);
   const [status, setStatus] = useState<CosmeticsStatus | "error" | undefined>(fresh);
   useEffect(() => {
     if (fresh) return setStatus(fresh);
@@ -372,7 +372,7 @@ function useVitraStatus(): CosmeticsStatus | "error" | undefined {
     api
       .cosmeticsStatus()
       .then((s) => {
-        statusCache = { key, at: Date.now(), value: s };
+        remember("vitra-status", key, s);
         if (live) setStatus(s);
       })
       .catch(() => live && setStatus("error"));
@@ -395,7 +395,14 @@ function VitraCard({ status }: { status: CosmeticsStatus | "error" | undefined }
     setArt(null);
     // No cape yet: show off a free one instead.
     const show = cape ?? data?.presets[0]?.cape;
-    if (show) loadVitraCape(show).then(setArt).catch(() => {});
+    if (!show) return;
+    let live = true;
+    loadVitraCape(show)
+      .then((a) => live && setArt(a))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
   }, [cape?.id, data?.presets[0]?.cape.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const count = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());

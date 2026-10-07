@@ -191,6 +191,20 @@ fn expected_pack_format(state: &AppState, inst: &Instance) -> Option<i64> {
         .or_else(|| pv.as_i64())
 }
 
+/// Whether a pack (its `pack.mcmeta`) suits the expected format; `None` when either is unknown.
+fn pack_compatible(expected: Option<i64>, meta: Option<&serde_json::Value>) -> Option<bool> {
+    let pack = meta.and_then(|m| m.get("pack"));
+    let format = pack.and_then(|p| p.get("pack_format")).and_then(|f| f.as_i64());
+    let supported_max = pack
+        .and_then(|p| p.get("supported_formats"))
+        .and_then(|s| s.get("max_inclusive").or_else(|| s.get(1)))
+        .and_then(|m| m.as_i64());
+    match (expected, format) {
+        (Some(exp), Some(f)) => Some(f == exp || supported_max.map(|m| f <= exp && exp <= m).unwrap_or(false)),
+        _ => None,
+    }
+}
+
 #[tauri::command]
 pub fn list_resource_packs(state: State<'_, Arc<AppState>>, id: String) -> Result<Vec<ResourcePack>> {
     let inst = instances::load(&state, &id)?;
@@ -210,10 +224,6 @@ pub fn list_resource_packs(state: State<'_, Arc<AppState>>, id: String) -> Resul
             let (meta, icon_bytes) = read_pack(&path);
             let pack = meta.as_ref().and_then(|m| m.get("pack"));
             let format = pack.and_then(|p| p.get("pack_format")).and_then(|f| f.as_i64());
-            let supported_max = pack
-                .and_then(|p| p.get("supported_formats"))
-                .and_then(|s| s.get("max_inclusive").or_else(|| s.get(1)))
-                .and_then(|m| m.as_i64());
             let icon = icon_bytes.filter(|b| util::png_dimensions(b).is_some()).and_then(|b| {
                 let dest = state.cache_dir().join("packicons").join(format!("{}.png", util::sha1_bytes(&b)));
                 util::write_atomic(&dest, &b).ok()?;
@@ -221,10 +231,7 @@ pub fn list_resource_packs(state: State<'_, Arc<AppState>>, id: String) -> Resul
             });
             let key = format!("file/{name}");
             let order = enabled.iter().position(|p| *p == key);
-            let compatible = match (expected, format) {
-                (Some(exp), Some(f)) => Some(f == exp || supported_max.map(|m| f <= exp && exp <= m).unwrap_or(false)),
-                _ => None,
-            };
+            let compatible = pack_compatible(expected, meta.as_ref());
             packs.push(ResourcePack {
                 title: name.trim_end_matches(".zip").to_string(),
                 description: pack.and_then(|p| p.get("description")).map(description_text).unwrap_or_default(),
@@ -271,6 +278,14 @@ pub fn set_resource_packs(state: State<'_, Arc<AppState>>, id: String, enabled: 
     // differs, so the game doesn't silently drop them.
     let mut incompatible: Vec<String> = opts.list("incompatibleResourcePacks");
     incompatible.retain(|p| list.contains(p));
+    let expected = expected_pack_format(&state, &inst);
+    let packs_dir = instances::game_dir(&state, &inst).join("resourcepacks");
+    for name in &enabled {
+        let key = format!("file/{name}");
+        if !incompatible.contains(&key) && pack_compatible(expected, read_pack(&packs_dir.join(name)).0.as_ref()) == Some(false) {
+            incompatible.push(key);
+        }
+    }
     opts.set("resourcePacks", serde_json::to_string(&list)?);
     opts.set("incompatibleResourcePacks", serde_json::to_string(&incompatible)?);
     opts.save(&path)

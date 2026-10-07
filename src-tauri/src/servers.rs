@@ -107,6 +107,20 @@ fn entries(store: &ServerStore) -> Vec<ServerEntry> {
     out
 }
 
+/// The name of the server at `address` in Vitra's list (featured or your own), if it's there.
+pub(crate) fn name_for(state: &AppState, address: &str) -> Option<String> {
+    let same = |a: &str, b: &str| a.trim_end_matches('.').eq_ignore_ascii_case(b.trim_end_matches('.'));
+    let (host, port) = split_address(address).ok()?;
+    entries(&load_store(state))
+        .into_iter()
+        .find(|e| {
+            split_address(&e.address)
+                .map(|(h, p)| same(&h, &host) && p.unwrap_or(25565) == port.unwrap_or(25565))
+                .unwrap_or(false)
+        })
+        .map(|e| e.name)
+}
+
 /// `host` or `host:port`; hostnames, IPv4 and bracketed IPv6.
 fn split_address(address: &str) -> Result<(String, Option<u16>)> {
     let a = address.trim();
@@ -280,7 +294,7 @@ async fn resolve(host: &str, port: Option<u16>) -> (String, u16) {
     (host.to_string(), 25565)
 }
 
-async fn ping(address: &str) -> Result<ServerStatus> {
+pub(crate) async fn ping(address: &str) -> Result<ServerStatus> {
     let (host, port) = split_address(address)?;
     let (connect_host, connect_port) = resolve(&host, port).await;
 

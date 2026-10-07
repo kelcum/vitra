@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 
 use crate::error::Result;
 use crate::minecraft::manifest::VersionManifest;
@@ -29,6 +29,11 @@ pub struct AppState {
     pub http: reqwest::Client,
     pub tasks: Tasks,
     pub running: Mutex<HashMap<String, RunningGame>>,
+    /// Instances between "Play" and their game starting (account check, install, Java), so a second
+    /// launch can't start the same instance twice.
+    pub launching: Mutex<HashSet<String>>,
+    /// The Discord status.
+    pub presence: crate::presence::Presence,
     pub manifest: tokio::sync::Mutex<Option<(i64, VersionManifest)>>,
     pub auth_cancel: Mutex<Option<tokio::sync::watch::Sender<bool>>>,
 }
@@ -56,6 +61,8 @@ impl AppState {
             settings: RwLock::new(settings),
             http,
             running: Mutex::new(HashMap::new()),
+            launching: Mutex::new(HashSet::new()),
+            presence: Default::default(),
             manifest: tokio::sync::Mutex::new(None),
             auth_cancel: Mutex::new(None),
         }))
@@ -71,11 +78,19 @@ impl AppState {
         Ok(())
     }
 
+    /// Changes settings from the backend (selected instance, active account, …) and tells the UI, which
+    /// would otherwise write its older copy back on the next save.
     pub fn update_settings(&self, f: impl FnOnce(&mut Settings)) -> Result<Settings> {
         let mut s = self.settings();
         f(&mut s);
         self.replace_settings(s.clone())?;
+        let _ = self.app.emit("settings://changed", &s);
         Ok(s)
+    }
+
+    /// Whether an instance's game is running or being started.
+    pub fn in_use(&self, id: &str) -> bool {
+        self.launching.lock().unwrap().contains(id) || self.running.lock().unwrap().contains_key(id)
     }
 
     /// Root for shared game data (libraries, assets, runtimes, instances).

@@ -176,6 +176,10 @@ pub fn detect_all(state: &AppState) -> Vec<JavaInstall> {
     if let Ok(entries) = std::fs::read_dir(state.runtimes_dir()) {
         for e in entries.flatten() {
             let component = e.file_name().to_string_lossy().to_string();
+            // "<component>.next" / ".old" are a runtime update in progress, not a runtime of their own.
+            if component.contains('.') {
+                continue;
+            }
             if e.path().join(".vitra-complete").exists() {
                 if let Some(j) = describe(&e.path(), "managed", Some(component)) {
                     if seen.insert(j.path.to_lowercase()) {
@@ -271,13 +275,43 @@ pub async fn ensure_runtime(state: &AppState, task: &TaskHandle, component: &str
         );
     };
 
-    if std::fs::read_to_string(&marker).map(|v| v.trim() == entry.version.name).unwrap_or(false)
-        && java_binary(&dir).exists()
-    {
+    let is_current = |d: &Path| std::fs::read_to_string(d.join(".vitra-complete")).map(|v| v.trim() == entry.version.name).unwrap_or(false);
+    if is_current(&dir) && java_binary(&dir).exists() {
         return Ok(java_binary(&dir));
     }
 
-    task.stage(format!("Downloading Java {major} runtime"), true);
+    // An update to an installed runtime is built next to it and swapped in afterwards: on Windows the
+    // files of a Java that a running game uses can't be replaced.
+    let installed = marker.exists() && java_binary(&dir).exists();
+    let target = if installed { state.runtimes_dir().join(format!("{component}.next")) } else { dir.clone() };
+    if !(installed && is_current(&target)) {
+        task.stage(format!("Downloading Java {major} runtime"), true);
+        if installed && !target.exists() {
+            // Start from the current files, so only what changed is downloaded.
+            util::copy_dir_recursive(&dir, &target)?;
+            let _ = std::fs::remove_file(target.join(".vitra-complete"));
+        }
+        download_runtime(state, task, &entry, component, &target).await?;
+        std::fs::write(target.join(".vitra-complete"), &entry.version.name)?;
+    }
+    if installed {
+        let old = state.runtimes_dir().join(format!("{component}.old"));
+        let _ = std::fs::remove_dir_all(&old);
+        if std::fs::rename(&dir, &old).is_err() {
+            log::info!("Java {major} is in use; its update is ready and goes in next time.");
+            return Ok(java_binary(&dir));
+        }
+        if let Err(e) = std::fs::rename(&target, &dir) {
+            let _ = std::fs::rename(&old, &dir);
+            return Err(e.into());
+        }
+        let _ = std::fs::remove_dir_all(&old);
+    }
+    Ok(java_binary(&dir))
+}
+
+/// Downloads (or tops up) the files of a Mojang runtime into `dir`.
+async fn download_runtime(state: &AppState, task: &TaskHandle, entry: &RuntimeEntry, component: &str, dir: &Path) -> Result<()> {
     let manifest_path = state.cache_dir().join(format!("runtime-{component}.json"));
     net::fetch_file(&state.http, &entry.manifest.url, &manifest_path, Some(&entry.manifest.sha1)).await?;
     let manifest: RuntimeManifest = util::read_json(&manifest_path)?;
@@ -286,7 +320,7 @@ pub async fn ensure_runtime(state: &AppState, task: &TaskHandle, component: &str
     let mut executables = Vec::new();
     let mut links = Vec::new();
     for (rel, file) in &manifest.files {
-        let target = util::safe_join(&dir, rel)?;
+        let target = util::safe_join(dir, rel)?;
         match file.kind.as_str() {
             "directory" => std::fs::create_dir_all(&target)?,
             "file" => {
@@ -326,9 +360,7 @@ pub async fn ensure_runtime(state: &AppState, task: &TaskHandle, component: &str
     {
         let _ = (executables, links);
     }
-
-    std::fs::write(&marker, &entry.version.name)?;
-    Ok(java_binary(&dir))
+    Ok(())
 }
 
 #[tauri::command]

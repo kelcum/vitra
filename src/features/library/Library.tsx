@@ -27,9 +27,19 @@ export default function Library() {
   const [importing, setImporting] = useState(false);
   const [covers, setCovers] = useState<Record<string, InstanceCover>>({});
 
+  // Covers only change when instances come or go, or after playing (new screenshots), not on every
+  // refresh of the list.
+  const coverKey = instances.map((i) => `${i.id}:${i.lastPlayed ?? 0}:${i.gameDir ?? ""}`).join("|");
   useEffect(() => {
-    api.instanceCovers().then(setCovers).catch(() => {});
-  }, [instances]);
+    let live = true;
+    api
+      .instanceCovers()
+      .then((c) => live && setCovers(c))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [coverKey]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

@@ -189,13 +189,21 @@ pub async fn install(
     let name = if loader == "neoforge" { "NeoForge" } else { "Forge" };
     task.stage(format!("Downloading {name} installer"), true);
     let installer = state.cache_dir().join("installers").join(format!("{loader}-{game}-{version}-installer.jar"));
-    if !installer.exists() {
-        let url = installer_url(loader, game, version);
-        net::download_all(state, task, vec![Download::new(url, installer.clone())], false).await?;
+    let url = installer_url(loader, game, version);
+    // The maven publishes a .sha1 next to each file. With it, a damaged copy in the cache is noticed
+    // and downloaded again; without it (offline), a cached installer is used as it is.
+    let sha1 = net::get_bytes(&state.http, &format!("{url}.sha1"))
+        .await
+        .ok()
+        .and_then(|b| String::from_utf8(b).ok())
+        .and_then(|t| t.split_whitespace().next().map(str::to_ascii_lowercase))
+        .filter(|h| h.len() == 40 && h.chars().all(|c| c.is_ascii_hexdigit()));
+    if sha1.is_some() || !installer.exists() {
+        net::download_all(state, task, vec![Download::new(url, installer.clone()).sha1(sha1)], true).await?;
     }
 
     let inst_path = installer.clone();
-    let (profile, version_bytes) = tokio::task::spawn_blocking(move || -> Result<(InstallProfile, Option<Vec<u8>>)> {
+    let read = tokio::task::spawn_blocking(move || -> Result<(InstallProfile, Option<Vec<u8>>)> {
         let mut zip = zip::ZipArchive::new(std::fs::File::open(&inst_path)?)?;
         let raw = read_zip_entry(&mut zip, "install_profile.json")
             .ok_or_else(|| Error::Msg("The installer is missing install_profile.json".into()))?;
@@ -204,7 +212,15 @@ pub async fn install(
         Ok((profile, version))
     })
     .await
-    .map_err(|e| Error::Msg(e.to_string()))??;
+    .map_err(|e| Error::Msg(e.to_string()))?;
+    let (profile, version_bytes) = match read {
+        Ok(read) => read,
+        Err(e) => {
+            // Don't keep a broken installer around: the next try downloads it again.
+            let _ = std::fs::remove_file(&installer);
+            bail!("The {name} installer was damaged ({e}). Try again to download a fresh copy.");
+        }
+    };
 
     // Legacy installer: version JSON + universal jar are embedded directly.
     if let (Some(info), Some(legacy)) = (&profile.version_info, &profile.install) {

@@ -29,6 +29,7 @@ export function useFileDrop(onDrop: (paths: string[]) => void, enabled = true) {
   useEffect(() => {
     if (!enabled) return;
     let unlisten: (() => void) | undefined;
+    let gone = false;
     getCurrentWebview()
       .onDragDropEvent((e) => {
         if (e.payload.type === "enter" || e.payload.type === "over") setHovering(true);
@@ -38,8 +39,15 @@ export function useFileDrop(onDrop: (paths: string[]) => void, enabled = true) {
           onDrop(e.payload.paths);
         }
       })
-      .then((u) => (unlisten = u));
-    return () => unlisten?.();
+      .then((u) => {
+        // Unmounted before the listener was ready: remove it right away instead of leaking it.
+        if (gone) u();
+        else unlisten = u;
+      });
+    return () => {
+      gone = true;
+      unlisten?.();
+    };
   }, [onDrop, enabled]);
   return hovering;
 }

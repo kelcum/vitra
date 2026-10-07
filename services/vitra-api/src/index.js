@@ -2,8 +2,9 @@
 //
 // Vitra proves a player owns their Minecraft account with the key pair Mojang issues every account
 // for chat signing (see verifyProof); nothing secret ever leaves the player's computer.
-// The game then gets a short-lived token so it can say "I'm on Vitra right now" (the badge),
-// and anyone can look up which players use Vitra and which cape they wear.
+// The game then gets a short-lived token so it can say "I'm on Vitra right now" (the badge).
+// Capes are public; who is on Vitra right now is only told to Vitra players in game (with a token).
+// Players can delete everything kept about them (DELETE /v1/me).
 
 import MOJANG_KEYS from './mojang-keys.json';   // api.minecraftservices.com/publickeys → playerCertificateKeys
 
@@ -11,6 +12,11 @@ const ONLINE_MS = 3 * 60 * 1000;          // a ping within this window counts as
 const TOKEN_TTL_MS = 24 * 3600 * 1000;
 const PING_WRITE_MS = 60 * 1000;          // don't rewrite last_seen more often than this
 const MAX_PNG_BYTES = 1_500_000;
+// Every Vitra player in view decodes a cape, so its decoded size is capped: 256 px wide at most,
+// and 256×128×48 pixels (about 6 MB) across all frames.
+const MAX_CAPE_WIDTH = 256;
+const MAX_CAPE_FRAMES = 48;
+const MAX_CAPE_PIXELS = 256 * 128 * 48;
 const MAX_UPLOADS_PER_DAY = 20;
 const MAX_LOOKUP = 300;
 const UUID_RE = /^[0-9a-f]{32}$/;
@@ -38,7 +44,11 @@ async function route(req, env, ctx, url) {
   if (p === '/' && m === 'GET') return json({ service: 'vitra-api', ok: true });
   if (p === '/v1/auth' && m === 'POST') return auth(env, await body(req));
   if (p === '/v1/ping' && m === 'POST') return ping(env, req, await body(req));
-  if (p === '/v1/lookup' && m === 'POST') return json({ players: await lookup(env, (await body(req)).players) });
+  if (p === '/v1/lookup' && m === 'POST') {
+    const claims = await verifyToken(env, bearer(req));
+    return json({ players: await lookup(env, (await body(req)).players, !!claims) });
+  }
+  if (p === '/v1/me' && m === 'DELETE') return deleteMe(env, await body(req));
   if (p === '/v1/presets' && m === 'GET') return presets(env);
   if (p === '/v1/stats' && m === 'GET') return stats(env);
   if (p === '/v1/me/cape' && m === 'PUT') return setCape(env, await body(req));
@@ -106,6 +116,8 @@ async function sha256hex(text) {
   return [...new Uint8Array(d)].map(x => x.toString(16).padStart(2, '0')).join('');
 }
 
+// The name is whatever the launcher sent; only the UUID is proven. It's kept for the owner's own
+// reference and never handed out.
 async function upsertUser(env, who) {
   const now = Date.now();
   await env.DB.prepare(
@@ -124,16 +136,18 @@ async function auth(env, b) {
 // ── presence and lookups (what the game asks for) ─────────────────────────
 
 async function ping(env, req, b) {
-  const claims = await verifyToken(env, (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''));
+  const claims = await verifyToken(env, bearer(req));
   if (!claims) throw new HttpError(401, 'Token expired.');
   const now = Date.now();
   await env.DB.prepare('UPDATE users SET last_seen = ?1 WHERE uuid = ?2 AND last_seen < ?3')
     .bind(now, claims.u, now - PING_WRITE_MS).run();
   const players = Array.isArray(b.players) ? b.players : [];
-  return json({ players: await lookup(env, [claims.u, ...players]) });
+  return json({ players: await lookup(env, [claims.u, ...players], true) });
 }
 
-async function lookup(env, list) {
+// `presence`: whether to say who is on Vitra right now (for Vitra players in game, who have a token).
+// Without it only capes are told, which anyone can see in game anyway.
+async function lookup(env, list, presence) {
   if (!Array.isArray(list)) throw new HttpError(400, 'Expected a list of players.');
   const ids = [...new Set(list.filter(u => typeof u === 'string').map(u => u.replace(/-/g, '').toLowerCase()).filter(u => UUID_RE.test(u)))].slice(0, MAX_LOOKUP);
   const out = {}, now = Date.now();
@@ -143,7 +157,11 @@ async function lookup(env, list) {
       `SELECT u.uuid, u.last_seen, c.id, c.w, c.h, c.frames, c.delay FROM users u
        LEFT JOIN capes c ON c.id = u.cape WHERE u.uuid IN (${chunk.map((_, j) => '?' + (j + 1)).join(',')})`
     ).bind(...chunk).all();
-    for (const r of results) out[r.uuid] = { online: now - r.last_seen < ONLINE_MS, badge: badgeFor(env, r.uuid), cape: r.id ? capeInfo(r) : null };
+    for (const r of results) {
+      out[r.uuid] = presence
+        ? { online: now - r.last_seen < ONLINE_MS, badge: badgeFor(env, r.uuid), cape: r.id ? capeInfo(r) : null }
+        : { online: false, badge: null, cape: r.id ? capeInfo(r) : null };
+    }
   }
   return out;
 }
@@ -154,12 +172,15 @@ const badgeFor = (env, uuid) => (isAdmin(env, uuid) ? 'owner' : 'vitra');
 
 const capeInfo = r => ({ id: r.id, url: `https://api.xan.gripe/v1/capes/${r.id}.png`, w: r.w, h: r.h, frames: r.frames, delay: r.delay });
 
-async function player(env, uuid, raw) {
+// `own`: the player asking about themselves (signed in with proof), who may see everything.
+// Anyone else only learns which cape a player wears.
+async function player(env, uuid, own) {
   const r = await env.DB.prepare(
     'SELECT u.uuid, u.name, u.last_seen, c.id, c.w, c.h, c.frames, c.delay FROM users u LEFT JOIN capes c ON c.id = u.cape WHERE u.uuid = ?1'
   ).bind(uuid).first();
-  const info = r ? { vitra: true, name: r.name, online: Date.now() - r.last_seen < ONLINE_MS, badge: badgeFor(env, r.uuid), cape: r.id ? capeInfo(r) : null } : { vitra: false, cape: null };
-  return raw ? info : json(info);
+  const cape = r?.id ? capeInfo(r) : null;
+  if (!own) return json({ cape });
+  return r ? { vitra: true, name: r.name, online: Date.now() - r.last_seen < ONLINE_MS, badge: badgeFor(env, r.uuid), cape } : { vitra: false, cape: null };
 }
 
 // How many people use Vitra, and how many are in game right now. Counts only, no names.
@@ -185,8 +206,9 @@ async function capeImage(env, ctx, req, id) {
   if (hit) return hit;
   const r = await env.DB.prepare('SELECT png FROM capes WHERE id = ?1').bind(id).first();
   if (!r) throw new HttpError(404, 'No such cape.');
+  // A day, not forever: a deleted cape should stop being served soon.
   const res = new Response(new Uint8Array(r.png), {
-    headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' },
+    headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=86400' },
   });
   ctx.waitUntil(cache.put(req, res.clone()));
   return res;
@@ -198,13 +220,15 @@ async function storeCape(env, b, owner) {
   let bytes;
   try { bytes = Uint8Array.from(atob(b.image), c => c.charCodeAt(0)); } catch { throw new HttpError(400, 'Image is not valid base64.'); }
   if (bytes.length > MAX_PNG_BYTES) throw new HttpError(413, 'That cape is too big. Keep it under 1.5 MB.');
-  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
-  if (bytes.length < 33 || sig.some((v, i) => bytes[i] !== v)) throw new HttpError(400, 'The cape has to be a PNG.');
+  checkPng(bytes);
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const w = dv.getUint32(16), h = dv.getUint32(20);
-  if (w % 64 || w < 64 || w > 512) throw new HttpError(400, 'Cape width must be 64, 128, 192, … up to 512 pixels.');
+  if (w % 64 || w < 64 || w > MAX_CAPE_WIDTH) throw new HttpError(400, `Cape width must be 64, 128, 192 or ${MAX_CAPE_WIDTH} pixels.`);
   const frameH = w / 2, frames = h / frameH;
-  if (!Number.isInteger(frames) || frames < 1 || frames > 64) throw new HttpError(400, 'The image must be 1 to 64 cape frames stacked on top of each other.');
+  if (!Number.isInteger(frames) || frames < 1 || frames > MAX_CAPE_FRAMES) {
+    throw new HttpError(400, `The image must be 1 to ${MAX_CAPE_FRAMES} cape frames stacked on top of each other.`);
+  }
+  if (w * h > MAX_CAPE_PIXELS) throw new HttpError(400, 'That cape has too many pixels. Use fewer frames or a smaller size.');
   if (b.frames !== undefined && b.frames !== frames) throw new HttpError(400, 'Frame count does not match the image.');
   const delay = Math.round(Number(b.delay) || 100);
   if (delay < 20 || delay > 5000) throw new HttpError(400, 'Frame time must be between 20 and 5000 ms.');
@@ -234,7 +258,46 @@ async function setCape(env, b) {
     throw new HttpError(400, 'Pick a cape, upload one, or remove yours.');
   }
   await env.DB.prepare('UPDATE users SET cape = ?1 WHERE uuid = ?2').bind(capeId, who.uuid).run();
-  return player(env, who.uuid);
+  return json(await player(env, who.uuid, true));
+}
+
+// The PNG's structure: signature, IHDR first (8-bit RGB or RGBA, not interlaced), chunks that fit the
+// file, at least one IDAT, IEND last. Decoders in the game get only well-formed images.
+function checkPng(bytes) {
+  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (bytes.length < 57 || sig.some((v, i) => bytes[i] !== v)) throw new HttpError(400, 'The cape has to be a PNG.');
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const type = at => String.fromCharCode(bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]);
+  if (dv.getUint32(8) !== 13 || type(12) !== 'IHDR') throw new HttpError(400, 'The cape PNG is damaged.');
+  const depth = bytes[24], color = bytes[25], interlace = bytes[28];
+  if (depth !== 8 || (color !== 2 && color !== 6) || bytes[26] !== 0 || bytes[27] !== 0 || interlace !== 0) {
+    throw new HttpError(400, 'The cape PNG must be 8-bit RGB or RGBA, not interlaced.');
+  }
+  let pos = 8, idat = false, end = false;
+  while (pos + 12 <= bytes.length) {
+    const len = dv.getUint32(pos), name = type(pos + 4);
+    if (len > bytes.length - pos - 12) throw new HttpError(400, 'The cape PNG is damaged.');
+    if (name === 'IDAT') idat = true;
+    pos += 12 + len;
+    if (name === 'IEND') { end = true; break; }
+  }
+  if (!idat || !end || pos !== bytes.length) throw new HttpError(400, 'The cape PNG is damaged.');
+}
+
+// ── your data ──────────────────────────────────────────────────────────────
+
+// Deletes the player's record and the capes they uploaded that nobody else wears.
+async function deleteMe(env, b) {
+  const who = await verifyProof(b.name, b.proof, 'delete');
+  await env.DB.batch([
+    env.DB.prepare(
+      `DELETE FROM capes WHERE owner = ?1
+         AND id NOT IN (SELECT cape FROM users WHERE cape IS NOT NULL AND uuid != ?1)
+         AND id NOT IN (SELECT cape FROM presets)`
+    ).bind(who.uuid),
+    env.DB.prepare('DELETE FROM users WHERE uuid = ?1').bind(who.uuid),
+  ]);
+  return json({ deleted: true });
 }
 
 // ── admin ──────────────────────────────────────────────────────────────────
@@ -258,6 +321,8 @@ async function removeCape(env, uuid, b) {
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
+
+const bearer = req => (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
 
 async function body(req) {
   if (Number(req.headers.get('content-length') || 0) > MAX_PNG_BYTES * 1.4 + 4096) throw new HttpError(413, 'Request too large.');

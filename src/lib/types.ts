@@ -28,6 +28,10 @@ export interface Settings {
   checkUpdates: boolean;
   /** Vitra badges and capes in Fabric instances. */
   cosmetics: boolean;
+  /** Show Vitra and what you're playing on your Discord profile. */
+  discordPresence: boolean;
+  /** Name the server you're on in that status. */
+  discordShowServer: boolean;
   notifications: { downloads: boolean; crashes: boolean; gameUpdates: boolean };
   gameDataDir: string | null;
   downloadConcurrency: number;
@@ -463,7 +467,6 @@ export interface ServerStatus {
   favicon: string | null;
 }
 
-/** A skin found by player name or link, not yet saved to the library. */
 export interface NameChangeInfo {
   allowed: boolean;
   /** When the name last changed (ms), if it ever did. */
@@ -473,11 +476,13 @@ export interface NameChangeInfo {
 }
 
 export interface NameCheck {
-  results: { name: string; status: "available" | "taken" | "not_allowed" | "invalid" }[];
+  /** "unknown": Mojang didn't answer for that name. */
+  results: { name: string; status: "available" | "taken" | "not_allowed" | "invalid" | "unknown" }[];
   /** Mojang paused answering (rate limit), so the rest weren't checked. */
   limited: boolean;
 }
 
+/** A skin found by player name or link, not yet saved to the library. */
 export interface FoundSkin {
   name: string;
   source: "player" | "link";

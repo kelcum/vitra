@@ -5,6 +5,7 @@ import { TextInput } from "../../components/ui/Controls";
 import { Notice, Skeleton } from "../../components/ui/Feedback";
 import { Modal } from "../../components/ui/Overlay";
 import { api, errorMessage } from "../../lib/api";
+import { forgetAccountData } from "../../lib/cache";
 import { toast, useAccounts } from "../../lib/store";
 import type { NameChangeInfo, ProfileView } from "../../lib/types";
 import { NAME_RE, nameIdeas, nameProblem } from "./names";
@@ -74,7 +75,8 @@ export function NameChangeDialog({
       const self = r.results.find((x) => x.name === typed);
       setResult({
         name: typed,
-        status: own ? "yours" : !valid ? "invalid" : (self?.status ?? null),
+        // "unknown": Mojang didn't answer for this one.
+        status: own ? "yours" : !valid ? "invalid" : self && self.status !== "unknown" ? self.status : null,
         ideas: r.results.filter((x) => x.status === "available" && x.name !== typed).map((x) => x.name).slice(0, IDEAS),
         limited: r.limited,
       });
@@ -90,6 +92,7 @@ export function NameChangeDialog({
     setSaving(true);
     try {
       const profile = await api.changeName(confirm);
+      forgetAccountData();
       onChanged(profile);
       await useAccounts.getState().refresh();
       toast.success(`You're ${profile.name} now`, "Rejoin servers and worlds to show the new name.");

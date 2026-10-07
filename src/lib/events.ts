@@ -3,7 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { create } from "zustand";
 import { api } from "./api";
 import { formatDuration } from "./format";
-import type { Account, GameExit, LogLine, TaskSnapshot } from "./types";
+import type { Account, GameExit, LogLine, Settings, TaskSnapshot } from "./types";
 import { toast, useAccounts, useDialogs, useInstances, useLogs, useSettings, useTasks } from "./store";
 
 /** Bumped whenever an instance's installed content changes. */
@@ -12,7 +12,8 @@ export const useContentVersion = create<{ v: number; bump: () => void }>((set) =
   bump: () => set((s) => ({ v: s.v + 1 })),
 }));
 
-const NOTIFY_KINDS = new Set(["install", "modpack", "content", "java", "backup", "export", "copy"]);
+// Backups aren't here: the Back up menu item says where the file went.
+const NOTIFY_KINDS = new Set(["install", "modpack", "content", "java", "export", "copy"]);
 
 // Ambient motion (and the 3D skin viewer) pauses whenever nobody is looking:
 // game running, window hidden/minimized/unfocused, or no input for a minute.
@@ -106,6 +107,8 @@ export async function wireEvents() {
 
   await listen<{ instanceId: string }>("content://changed", () => useContentVersion.getState().bump());
   await listen("instances://changed", () => useInstances.getState().refresh());
+  // The backend changed a setting (selected instance after an install, active account, …).
+  await listen<Settings>("settings://changed", ({ payload }) => useSettings.getState().external(payload));
 
   // Pick up anything already running/in progress (e.g. after a reload).
   await refreshRunning();
@@ -118,6 +121,6 @@ function doneTitle(t: TaskSnapshot): string {
   if (t.kind === "content") return t.title.replace(/^Installing/, "Installed");
   if (t.kind === "backup") return "Backup saved";
   if (t.kind === "export") return "Modpack exported";
-  if (t.kind === "copy") return "Instance duplicated";
+  if (t.kind === "copy") return t.title.startsWith("Importing") ? t.title.replace(/^Importing/, "Imported") : "Instance duplicated";
   return `${t.title} — done`;
 }

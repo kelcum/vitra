@@ -4,8 +4,9 @@
 
 Minecraft 26.x ships with readable (unobfuscated) names, so the mod compiles straight against the
 game jar and its libraries: no Gradle or remapping. The game and Fabric Loader must already be
-installed in Vitra's data folder (launch a Fabric instance of that version once). Needs a JDK 25;
-set JAVA_HOME or keep one in ~/.cache/jdk.
+installed in Vitra's game data folder (launch a Fabric instance of that version once). That folder
+is found on its own; if you moved it (Settings -> Downloads & storage), set VITRA_DATA to it.
+Needs a JDK 25; set JAVA_HOME or keep one in ~/.cache/jdk.
 """
 import glob
 import json
@@ -17,9 +18,28 @@ import zipfile
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 MOD = os.path.join(ROOT, "mods", "vitra-cosmetics")
-DATA = os.path.expanduser("~/.cache/vitra-data")
 MC = sys.argv[1] if len(sys.argv) > 1 else "26.3"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
+
+
+def data_dir():
+    """Vitra's game data folder that has Minecraft MC installed."""
+    candidates = [os.environ.get("VITRA_DATA", "")]
+    if os.environ.get("APPDATA"):
+        candidates.append(os.path.join(os.environ["APPDATA"], "app.vitra.launcher"))
+    candidates += [
+        os.path.expanduser("~/Library/Application Support/app.vitra.launcher"),
+        os.path.expanduser("~/.local/share/app.vitra.launcher"),
+        os.path.expanduser("~/.cache/vitra-data"),       # a development copy
+    ]
+    for c in candidates:
+        if c and os.path.isdir(os.path.join(c, "versions", MC)):
+            return c
+    sys.exit(f"Minecraft {MC} isn't installed in Vitra's data folder. Launch a Fabric {MC} instance once, "
+             "or set VITRA_DATA to the folder (Settings -> Downloads & storage).")
+
+
+DATA = data_dir()
 
 
 def jdk_tool(name):

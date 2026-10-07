@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://xan.gripe/vitra/"><img alt="Website" src="https://img.shields.io/badge/website-xan.gripe%2Fvitra-ff7eb6?style=flat-square"></a>
-  <img alt="Version 0.1.3" src="https://img.shields.io/badge/version-0.1.3-8c5cff?style=flat-square">
+  <img alt="Version 0.1.4" src="https://img.shields.io/badge/version-0.1.4-8c5cff?style=flat-square">
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%26%2011-2f7fd8?style=flat-square">
   <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24c8db?style=flat-square">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-backend-dea584?style=flat-square">
@@ -69,10 +69,11 @@ What works today (verified end to end on Windows 11 by installing and launching 
 | Accounts | ✅ Microsoft device-code sign-in → Xbox Live → XSTS → Minecraft; tokens encrypted with a key held in the OS credential store. Uses Vitra's built-in Azure app, approved by Mojang. Verified with a real account: sign-in, signed-in launch, Quick Play into Hypixel |
 | Skins & capes | ✅ 3D viewer (rotate, zoom, views, slim/classic, animations, elytra preview), skin library, **Popular** skins (well-known players, live from Mojang), **Find** any player's skin by name or link, upload to account, Mojang cape selection, OptiFine cape preview + signed-in editor link + in-game check (Capes mod) |
 | Name changes | ✅ Checks names with Mojang, suggests the closest free ones when a name is taken, explains the 30-day limit and changes it in one click. Screens tested with stand-in data; the live Mojang calls need a signed-in account |
-| Vitra cosmetics | ✅ Free capes (five animated presets, or any picture/GIF turned into a cape with matching elytra) and a Vitra badge (animated for the owner) shown in game to other Vitra players. Fabric 26.3; the mod ships inside Vitra and is added at launch, so mods folders stay untouched |
+| Vitra cosmetics | ✅ Free capes (five animated presets, or any picture/GIF turned into a cape with matching elytra) and a Vitra badge (animated for the owner) shown in game to other Vitra players. Fabric 26.3; the mod ships inside Vitra and is added at launch, so mods folders stay untouched. Players can delete their data from Settings |
+| Discord status | ✅ Built-in Rich Presence (no plugin): Vitra version, in the launcher / main menu / singleplayer / on a server with its name and live player count, and a "Get Vitra" button. Follows the game through its log; clears when turned off or when Vitra closes |
 | Performance | ✅ Hardware detection, 3 presets (writes real `options.txt` values + installs optimization mods + GC preset), optimization-mod picker, render/simulation distance, FPS cap, VSync, memory recommendations |
 | Instances | ✅ Create, duplicate, back up (zip), delete, rename, icons, cover pictures from your screenshots, per-instance Java/memory/JVM args/window size/game folder, repair (full re-verify) |
-| Import | ✅ Prism Launcher / PolyMC / MultiMC instances (auto-detected or pick a folder): version, loader, memory, play time, then a verified copy of mods, config, packs, shaders and worlds. The source is never modified |
+| Import | ✅ Prism Launcher / PolyMC / MultiMC, CurseForge, Modrinth App, ATLauncher, GDLauncher and the official launcher, plus any plain `.minecraft` folder (auto-detected or pick a folder): version, loader, memory, play time, then a verified copy of mods, config, packs, shaders and worlds. The source is never modified |
 | Servers | ✅ Curated list of large servers plus your own; live status over the vanilla Server List Ping (SRV lookup, MOTD with colors, favicon, players, version, latency); hide/unhide, edit, remove; one-click join via Quick Play (1.20+) or `--server` on older versions |
 | Logs | ✅ Live console (parsed Log4j XML), log & crash-report viewer, crash dialog with plain-language diagnosis |
 | Updates | ✅ Signed auto-updates (Tauri updater) served from xan.gripe |
@@ -115,7 +116,8 @@ src-tauri/src/           Rust backend
   modrinth.rs content.rs Modrinth API, install plans, content index, updates, trash
   modpack.rs packs.rs    .mrpack import/export; resource packs, shaders, options.txt
   skins.rs               skins, capes and name changes (Mojang profile API)
-  cosmetics.rs           Vitra badges and capes: ownership proof, game token, launch arguments
+  cosmetics.rs           Vitra badges and capes: ownership proof, game token, launch arguments, data deletion
+  presence.rs discord.rs Discord Rich Presence: what to show, and a small client for Discord's local IPC
   system.rs              system info, news, panorama, logs, storage
 mods/vitra-cosmetics/    the Fabric mod that draws badges and capes in game (plain javac, no Gradle)
 services/vitra-api/      api.xan.gripe: Cloudflare Worker + D1 for cosmetics (who uses Vitra, capes)
@@ -141,7 +143,8 @@ cd src-tauri && cargo test     # Rust unit tests (rules, args, log parsing, path
 ```
 
 The cosmetics mod is prebuilt at `src-tauri/resources/mods/`. To rebuild it you need a JDK 25 and Minecraft 26.3
-with Fabric installed once through Vitra: `python scripts/build-cosmetics-mod.py`.
+with Fabric installed once through Vitra: `python scripts/build-cosmetics-mod.py`. The script finds Vitra's game data
+folder by itself; if you moved it in Settings, point `VITRA_DATA` at it.
 
 Windows note: if the project lives in a very deep folder, the MSVC linker can hit the 260-character path limit.
 Set `CARGO_TARGET_DIR` to a short path (e.g. `C:\vt`) if you see `LNK1104`.
