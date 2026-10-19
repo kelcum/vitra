@@ -124,6 +124,27 @@ fn build_classpath(state: &AppState, installed: &Installed) -> String {
     entries.join(util::classpath_separator())
 }
 
+/// Forge for 1.17–1.20 and older NeoForge start through BootstrapLauncher,
+/// which turns every classpath jar into a Java module unless its file name
+/// starts with an `-DignoreList` entry. Their profiles list `${version_name}.jar`,
+/// the copy of the game the official launcher keeps under the loader's version
+/// folder. Vitra runs the vanilla jar in place, so its name is added too;
+/// otherwise the game loads twice and Java refuses to start ("Modules _1._20._1
+/// and minecraft export package …").
+fn ignore_client_jar(args: &mut [String], client_jar: &Path) {
+    let Some(name) = client_jar.file_name().map(|n| n.to_string_lossy().to_string()) else {
+        return;
+    };
+    for arg in args.iter_mut() {
+        if let Some(list) = arg.strip_prefix("-DignoreList=")
+            && !list.split(',').any(|e| !e.is_empty() && name.starts_with(e))
+        {
+            arg.push(',');
+            arg.push_str(&name);
+        }
+    }
+}
+
 pub fn build_command(
     state: &AppState,
     inst: &Instance,
@@ -203,7 +224,11 @@ pub fn build_command(
     args.push("-Dlog4j2.formatMsgNoLookups=true".into());
 
     match &v.arguments {
-        Some(a) if !a.jvm.is_empty() => args.extend(manifest::expand_args(&a.jvm, &features, &vars)),
+        Some(a) if !a.jvm.is_empty() => {
+            let mut jvm = manifest::expand_args(&a.jvm, &features, &vars);
+            ignore_client_jar(&mut jvm, &installed.client_jar);
+            args.extend(jvm);
+        }
         _ => {
             args.push(format!("-Djava.library.path={}", installed.natives_dir.display()));
             args.push("-cp".into());
@@ -645,5 +670,20 @@ mod tests {
         assert!(preset_flags("low-latency", 21).contains(&"-XX:+ZGenerational".to_string()));
         assert!(!preset_flags("low-latency", 25).contains(&"-XX:+ZGenerational".to_string()));
         assert!(preset_flags("low-latency", 8).contains(&"-XX:+UseG1GC".to_string()));
+    }
+
+    #[test]
+    fn bootstrap_skips_vanilla_jar() {
+        let jar = Path::new("versions").join("1.20.1").join("1.20.1.jar");
+        let mut args = vec![
+            "-DignoreList=bootstraplauncher,asm,forge-,1.20.1-forge-47.4.10.jar".to_string(),
+            "-DlibraryDirectory=libs".to_string(),
+        ];
+        ignore_client_jar(&mut args, &jar);
+        assert_eq!(args[0], "-DignoreList=bootstraplauncher,asm,forge-,1.20.1-forge-47.4.10.jar,1.20.1.jar");
+        assert_eq!(args[1], "-DlibraryDirectory=libs");
+        // Already covered: left alone.
+        ignore_client_jar(&mut args, &jar);
+        assert!(args[0].ends_with(",1.20.1-forge-47.4.10.jar,1.20.1.jar"));
     }
 }
