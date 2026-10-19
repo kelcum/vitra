@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://xan.gripe/vitra/"><img alt="Website" src="https://img.shields.io/badge/website-xan.gripe%2Fvitra-ff7eb6?style=flat-square"></a>
-  <img alt="Version 0.1.4" src="https://img.shields.io/badge/version-0.1.4-8c5cff?style=flat-square">
+  <img alt="Version 0.1.5" src="https://img.shields.io/badge/version-0.1.5-8c5cff?style=flat-square">
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%26%2011-2f7fd8?style=flat-square">
   <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24c8db?style=flat-square">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-backend-dea584?style=flat-square">
@@ -62,7 +62,7 @@ What works today (verified end to end on Windows 11 by installing and launching 
 | Vanilla install & launch | ✅ Version manifest, client jar, libraries, natives, assets (5,200+ files, SHA-1 verified), logging config, Quick Play into worlds (1.20+) |
 | Java | ✅ Mojang's official runtimes per version (Java 8/17/21/25), downloaded & verified per file; system Java detection; custom Java per instance |
 | Fabric / Quilt | ✅ Loader profiles from the official meta APIs. Verified: Fabric 0.19.5 on 26.3 with Sodium + Iris + Lithium (Quilt uses the same code path, not separately launched yet) |
-| Forge / NeoForge | ✅ Runs the official installer's processors (client side) and verifies their output hashes. Verified: NeoForge 26.3.0.43-beta and Forge 52.1.0 (1.21.1) reach the title screen |
+| Forge / NeoForge | ✅ Runs the official installer's processors (client side) and verifies their output hashes. Verified: NeoForge 26.3.0.43-beta, Forge 52.1.0 (1.21.1) and Forge 47.4.10 (1.20.1) reach the title screen |
 | Modrinth | ✅ Search, filters, categories, project pages (safe Markdown), version lists, one-click install, required-dependency resolution, incompatibility warnings, update checks, enable/disable, remove → restorable trash |
 | Modpacks | ✅ `.mrpack` install from Modrinth, import from file, export (Modrinth files referenced, others bundled). Import/export not yet tested with a large pack |
 | Resource packs / shaders | ✅ Pack icons & descriptions, enable + drag-to-reorder (writes `options.txt`), version-compatibility check, Iris shader selection |
