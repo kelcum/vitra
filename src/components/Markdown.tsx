@@ -1,16 +1,6 @@
 import { Fragment, memo, type ReactNode } from "react";
 import { api } from "../lib/api";
 
-/**
- * A deliberately small Markdown renderer for Modrinth descriptions.
- *
- * Descriptions are untrusted, and this webview can call the launcher's
- * backend — so raw HTML is never injected. Everything becomes React elements:
- * HTML tags are reduced to text/links/images first, links open in the system
- * browser (https only), and images are limited to Modrinth's CDN (also
- * enforced by the app's Content-Security-Policy).
- */
-
 const ALLOWED_IMG = /^https:\/\/cdn\.modrinth\.com\//;
 
 function decode(s: string) {
@@ -40,7 +30,6 @@ function htmlToMarkdown(src: string): string {
 
 function inline(text: string, key: string): ReactNode[] {
   const out: ReactNode[] = [];
-  // images, links, bold, italic, code
   const re = /!\[([^\]]*)\]\(([^)\s]+)[^)]*\)|\[([^\]]+)\]\(([^)\s]+)[^)]*\)|\*\*([^*]+)\*\*|__([^_]+)__|\*([^*\s][^*]*)\*|`([^`]+)`/g;
   let last = 0;
   let m: RegExpExecArray | null;

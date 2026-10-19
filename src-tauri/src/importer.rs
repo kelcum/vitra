@@ -1,10 +1,3 @@
-//! Imports instances from other launchers: Prism Launcher / MultiMC / PolyMC,
-//! CurseForge, Modrinth App, ATLauncher, GDLauncher and the official
-//! Minecraft Launcher, whose .minecraft folder also holds the worlds and
-//! packs of Lunar, Badlion and Feather. Each launcher's format is read into
-//! a launcher-neutral [`Candidate`]; importing creates a Vitra instance and
-//! copies the game folder. Sources are only read, never changed.
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -20,27 +13,19 @@ use crate::state::AppState;
 use crate::tasks::TaskHandle;
 use crate::util;
 
-// ------------------------------------------------------------------ model
-
-/// Which Minecraft version an instance runs.
 #[derive(Debug, Clone, PartialEq)]
 enum GameRef {
     Exact(String),
-    /// Official launcher profiles that follow the newest version.
     LatestRelease,
     LatestSnapshot,
 }
 
-/// What to copy from the source game folder.
 #[derive(Debug, Clone)]
 enum CopyRule {
-    /// Everything except these top-level names.
     AllExcept(Vec<&'static str>),
-    /// Only these top-level names (a shared .minecraft folder).
     Only(Vec<&'static str>),
 }
 
-/// Always skipped: only useful to the old launcher, or private to it.
 const NEVER_COPY: [&str; 12] = [
     "logs",
     "crash-reports",
@@ -56,7 +41,6 @@ const NEVER_COPY: [&str; 12] = [
     "launcher_cef_log.txt",
 ];
 
-/// The shareable parts of a shared .minecraft folder.
 const SHARED_VANILLA: [&str; 9] = [
     "saves",
     "resourcepacks",
@@ -72,7 +56,6 @@ const SHARED_VANILLA: [&str; 9] = [
 #[derive(Debug, Clone)]
 struct Candidate {
     source: &'static str,
-    /// Stable id: the instance folder, or `<launcher_profiles.json>#<profile>`.
     key: String,
     name: String,
     game: Option<GameRef>,
@@ -110,7 +93,6 @@ impl Candidate {
         }
     }
 
-    /// Fills in the problem when there's nothing importable.
     fn finish(mut self) -> Self {
         if self.problem.is_none() {
             if self.game.is_none() {
@@ -128,12 +110,9 @@ impl Candidate {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExternalInstance {
-    /// The launcher it comes from, e.g. "CurseForge".
     pub source: String,
-    /// Pass back to `import_external_instance`.
     pub path: String,
     pub name: String,
-    /// Empty when the version is resolved at import ("latest").
     pub game_version: String,
     pub loader: String,
     pub loader_version: Option<String>,
@@ -141,11 +120,8 @@ pub struct ExternalInstance {
     pub world_count: usize,
     pub size_bytes: u64,
     pub play_time_secs: u64,
-    /// Id of the Vitra instance this was already imported into.
     pub imported_as: Option<String>,
-    /// Something worth knowing before importing.
     pub note: Option<String>,
-    /// Set when the instance can't be imported.
     pub problem: Option<String>,
 }
 
@@ -196,8 +172,6 @@ fn view(c: &Candidate, existing: &[Instance]) -> ExternalInstance {
     }
 }
 
-// ------------------------------------------------------------------ helpers
-
 fn count_files(dir: &Path, exts: &[&str]) -> usize {
     std::fs::read_dir(dir)
         .map(|entries| {
@@ -218,7 +192,6 @@ fn count_worlds(saves: &Path) -> usize {
         .unwrap_or(0)
 }
 
-/// JSON files from Windows tools sometimes start with a byte-order mark.
 fn read_json_value(path: &Path) -> Option<Value> {
     let bytes = std::fs::read(path).ok()?;
     let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
@@ -236,13 +209,11 @@ fn iso_millis(v: &Value) -> Option<i64> {
         .filter(|t| *t > 0)
 }
 
-/// Keeps a memory setting only if it's safe on this computer.
 fn sane_memory(mb: u64) -> Option<u32> {
     let total = crate::settings::total_memory_mb();
     u32::try_from(mb).ok().filter(|m| *m >= 512 && *m <= total.saturating_sub(1024).max(1024))
 }
 
-/// `-Xmx4G` / `-Xmx4096M` / `-Xmx4096m` → MB.
 fn xmx_mb(args: &str) -> Option<u64> {
     let v = args.split_whitespace().find_map(|a| a.strip_prefix("-Xmx"))?;
     let (num, unit) = v.split_at(v.find(|c: char| !c.is_ascii_digit()).unwrap_or(v.len()));
@@ -267,10 +238,6 @@ fn normalize_loader(name: &str) -> String {
     .to_string()
 }
 
-// ------------------------------------------------------------------ MultiMC family
-
-/// Reads an INI file's `[General]` section (or any keys before the first
-/// section). Qt quotes values containing special characters.
 fn read_cfg(path: &Path) -> HashMap<String, String> {
     let mut out = HashMap::new();
     let Ok(text) = std::fs::read_to_string(path) else { return out };
@@ -376,7 +343,6 @@ fn multimc(dir: &Path, source: &'static str) -> Option<Candidate> {
     Some(c.finish())
 }
 
-/// The instances folder of a MultiMC-family root (honours `InstanceDir`).
 fn multimc_instances_dir(root: &Path) -> PathBuf {
     let cfg = ["prismlauncher.cfg", "polymc.cfg", "multimc.cfg"]
         .iter()
@@ -390,9 +356,6 @@ fn multimc_instances_dir(root: &Path) -> PathBuf {
     }
 }
 
-// ------------------------------------------------------------------ CurseForge
-
-/// `forge-47.2.0`, `fabric-0.15.11-1.20.1`, `neoforge-21.1.65`, `quilt-0.26.0-1.20.1`.
 fn split_loader_name(name: &str, game: &str) -> (String, Option<String>) {
     let Some((loader, rest)) = name.split_once('-') else { return (normalize_loader(name), None) };
     let version = rest.strip_suffix(&format!("-{game}")).unwrap_or(rest);
@@ -421,10 +384,6 @@ fn curseforge(dir: &Path) -> Option<Candidate> {
     Some(c.finish())
 }
 
-// ------------------------------------------------------------------ Modrinth App
-
-/// Modrinth App keeps profile details in `app.db` (SQLite); older versions
-/// (Theseus) wrote a `profile.json` per profile.
 fn modrinth_profiles(root: &Path) -> Vec<Candidate> {
     let profiles = root.join("profiles");
     let mut out = Vec::new();
@@ -448,7 +407,6 @@ fn modrinth_profiles(root: &Path) -> Vec<Candidate> {
                         let mut c = Candidate::new("Modrinth App", dir.to_string_lossy().to_string(), name);
                         c.game = game.filter(|g| !g.is_empty()).map(GameRef::Exact);
                         c.loader = normalize_loader(loader.as_deref().unwrap_or("vanilla"));
-                        // "stable"/"latest" mean "whatever is newest": let Vitra pick.
                         c.loader_version = loader_version.filter(|v| !v.is_empty() && v != "stable" && v != "latest");
                         c.game_dir = Some(dir);
                         c.copy = CopyRule::AllExcept(vec!["profile.json"]);
@@ -483,8 +441,6 @@ fn modrinth_profile_json(dir: &Path) -> Option<Candidate> {
     Some(c.finish())
 }
 
-// ------------------------------------------------------------------ ATLauncher
-
 fn atlauncher(dir: &Path) -> Option<Candidate> {
     let j = read_json_value(&dir.join("instance.json"))?;
     let l = j.get("launcher")?;
@@ -503,9 +459,6 @@ fn atlauncher(dir: &Path) -> Option<Candidate> {
     Some(c.finish())
 }
 
-// ------------------------------------------------------------------ GDLauncher
-
-/// GDLauncher (Carbon): `instance.json`, game files in an `instance` subfolder.
 fn gdlauncher_carbon(dir: &Path) -> Option<Candidate> {
     let j = read_json_value(&dir.join("instance.json"))?;
     let cfg = j.get("game_configuration")?;
@@ -522,7 +475,6 @@ fn gdlauncher_carbon(dir: &Path) -> Option<Candidate> {
     Some(c.finish())
 }
 
-/// GDLauncher (legacy): `config.json` next to the game files.
 fn gdlauncher_legacy(dir: &Path) -> Option<Candidate> {
     let j = read_json_value(&dir.join("config.json"))?;
     let loader = j.get("loader")?;
@@ -537,12 +489,6 @@ fn gdlauncher_legacy(dir: &Path) -> Option<Candidate> {
     Some(c.finish())
 }
 
-// ------------------------------------------------------------------ official launcher
-
-/// Reads `lastVersionId`: `1.21.1`, `fabric-loader-0.16.5-1.21.1`,
-/// `quilt-loader-0.26.4-1.21.1`, `1.20.1-forge-47.3.0`,
-/// `1.12.2-forge1.12.2-14.23.5.2847`, `neoforge-21.1.77`,
-/// `1.20.1-OptiFine_HD_U_I6`.
 fn parse_version_id(id: &str) -> (Option<String>, String, Option<String>, Option<String>) {
     let id = id.trim();
     for (prefix, loader) in [("fabric-loader-", "fabric"), ("quilt-loader-", "quilt")] {
@@ -595,8 +541,6 @@ fn official_profiles(minecraft: &Path) -> Vec<Candidate> {
         let shared = custom_dir.as_ref().is_none_or(|d| d == minecraft);
         c.game_dir = Some(custom_dir.unwrap_or_else(|| minecraft.to_path_buf()));
         c.copy = if shared {
-            // Every profile shares .minecraft: take the worlds and packs, and
-            // the mods only for modded profiles.
             let mut keep = SHARED_VANILLA.to_vec();
             if c.loader != "vanilla" {
                 keep.extend(["mods", "config", "defaultconfigs"]);
@@ -612,8 +556,6 @@ fn official_profiles(minecraft: &Path) -> Vec<Candidate> {
     out
 }
 
-/// A .minecraft folder without official launcher profiles (Lunar, Badlion,
-/// Feather and others play from it): its worlds, packs and settings.
 fn minecraft_folder(minecraft: &Path) -> Option<Candidate> {
     if minecraft.join("launcher_profiles.json").exists() || !minecraft.join("saves").is_dir() {
         return None;
@@ -626,19 +568,15 @@ fn minecraft_folder(minecraft: &Path) -> Option<Candidate> {
     Some(c.finish())
 }
 
-// ------------------------------------------------------------------ discovery
-
 fn env_path(var: &str) -> Option<PathBuf> {
     std::env::var(var).ok().map(PathBuf::from)
 }
 
-/// Everything installed in the usual places.
 fn scan_known() -> Vec<Candidate> {
     let mut out = Vec::new();
     let appdata = env_path("APPDATA");
     let home = env_path("USERPROFILE").or_else(|| env_path("HOME"));
 
-    // MultiMC family
     let mut mmc_roots: Vec<(&'static str, PathBuf)> = Vec::new();
     if let Some(a) = &appdata {
         mmc_roots.push(("Prism Launcher", a.join("PrismLauncher")));
@@ -655,7 +593,6 @@ fn scan_known() -> Vec<Candidate> {
         }
     }
 
-    // CurseForge
     if let Some(h) = &home {
         for dir in subdirs(&h.join("curseforge").join("minecraft").join("Instances")) {
             out.extend(curseforge(&dir));
@@ -663,24 +600,20 @@ fn scan_known() -> Vec<Candidate> {
     }
 
     if let Some(a) = &appdata {
-        // Modrinth App (and its Theseus-era folder)
         for root in [a.join("ModrinthApp"), a.join("com.modrinth.theseus")] {
             if root.is_dir() {
                 out.extend(modrinth_profiles(&root));
             }
         }
-        // ATLauncher
         for dir in subdirs(&a.join("ATLauncher").join("instances")) {
             out.extend(atlauncher(&dir));
         }
-        // GDLauncher
         for dir in subdirs(&a.join("gdlauncher_carbon").join("data").join("instances")) {
             out.extend(gdlauncher_carbon(&dir));
         }
         for dir in subdirs(&a.join("gdlauncher_next").join("instances")) {
             out.extend(gdlauncher_legacy(&dir));
         }
-        // Official launcher, or a bare .minecraft
         let minecraft = a.join(".minecraft");
         if minecraft.is_dir() {
             out.extend(official_profiles(&minecraft));
@@ -696,7 +629,6 @@ fn subdirs(dir: &Path) -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
-/// Recognises a single instance folder of any supported launcher.
 fn detect_dir(dir: &Path) -> Vec<Candidate> {
     if dir.join("instance.cfg").exists() || dir.join("mmc-pack.json").exists() {
         return multimc(dir, "MultiMC / Prism").into_iter().collect();
@@ -719,7 +651,6 @@ fn detect_dir(dir: &Path) -> Vec<Candidate> {
             return vec![c];
         }
     }
-    // A Modrinth App profile: the database lives two levels up.
     if dir.parent().is_some_and(|p| p.file_name().is_some_and(|n| n == "profiles")) {
         if let Some(root) = dir.parent().and_then(Path::parent) {
             let key = dir.to_string_lossy().to_string();
@@ -735,7 +666,6 @@ fn detect_dir(dir: &Path) -> Vec<Candidate> {
     minecraft_folder(dir).into_iter().collect()
 }
 
-/// A chosen folder: an instance, a launcher's instances folder, or a launcher root.
 fn scan_folder(dir: &Path) -> Vec<Candidate> {
     let direct = detect_dir(dir);
     if !direct.is_empty() {
@@ -756,7 +686,6 @@ fn scan_folder(dir: &Path) -> Vec<Candidate> {
     subdirs(dir).iter().flat_map(|d| detect_dir(d)).collect()
 }
 
-/// Finds the candidate an import key refers to.
 fn candidate_for(key: &str) -> Option<Candidate> {
     if let Some((left, right)) = key.rsplit_once('#') {
         let left = Path::new(left);
@@ -793,9 +722,6 @@ pub async fn find_external_instances(state: State<'_, Arc<AppState>>, folder: Op
     .map_err(|e| Error::Msg(e.to_string()))?
 }
 
-// ------------------------------------------------------------------ import
-
-/// Every file to copy, with its size, honouring the copy rule at the top level.
 fn collect_files(root: &Path, dir: &Path, rule: &CopyRule, out: &mut Vec<(PathBuf, u64)>) -> Result<()> {
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
@@ -808,7 +734,6 @@ fn collect_files(root: &Path, dir: &Path, rule: &CopyRule, out: &mut Vec<(PathBu
         if ft.is_dir() {
             collect_files(root, &path, rule, out)?;
         } else if ft.is_file() {
-            // Minecraft holds this while a world is open.
             if name == "session.lock" {
                 continue;
             }
@@ -879,8 +804,6 @@ pub async fn import_external_instance(state: State<'_, Arc<AppState>>, path: Str
     if let Some(w) = &c.window {
         inst.window = w.clone();
     }
-    // Java is left on automatic: the old launcher's runtime may not suit
-    // Vitra's install, and Vitra picks Mojang's runtime per version.
     instances::save(&state, &inst)?;
 
     let task = state.tasks.start("copy", format!("Importing {}", inst.name), Some(inst.id.clone()));
@@ -892,7 +815,6 @@ pub async fn import_external_instance(state: State<'_, Arc<AppState>>, path: Str
         .map_err(|e| Error::Msg(e.to_string()))
         .and_then(|r| r);
     if result.is_err() {
-        // Don't leave a half-copied instance behind.
         let dir = instances::instance_dir(&state, &inst.id);
         let _ = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(dir)).await;
     }
@@ -962,7 +884,6 @@ mod tests {
         let dir = temp_dir("cf");
         std::fs::create_dir_all(dir.join("mods")).unwrap();
         std::fs::write(dir.join("mods/a.jar"), b"x").unwrap();
-        // CurseForge writes a byte-order mark.
         std::fs::write(
             dir.join("minecraftinstance.json"),
             "\u{FEFF}{\"name\":\"Pack\",\"gameVersion\":\"1.20.1\",\"baseModLoader\":{\"name\":\"fabric-0.15.11-1.20.1\"}}",
@@ -1023,7 +944,6 @@ mod tests {
         let latest = found.iter().find(|c| c.name == "Latest release").unwrap();
         assert_eq!(latest.game, Some(GameRef::LatestRelease));
         assert!(!top_level_allowed(&latest.copy, "mods"));
-        // The key round-trips to the same profile.
         assert_eq!(candidate_for(&fab.key).map(|c| c.name), Some("Fab".into()));
         assert_eq!(view(fab, &[]).world_count, 1);
         let _ = std::fs::remove_dir_all(mc);
@@ -1032,7 +952,6 @@ mod tests {
 
 #[cfg(test)]
 mod live {
-    /// Prints what this computer's launchers offer: `cargo test -- --ignored live_scan --nocapture`.
     #[test]
     #[ignore]
     fn live_scan() {

@@ -18,11 +18,6 @@ interface Stage {
 
 const STAGES = ["Loading your settings", "Checking your account", "Verifying installations", "Syncing the Minecraft version list"];
 
-/**
- * Startup runs real work, stage by stage. The bar reports completed stages —
- * never an invented percentage. Non-critical stages (account, network) can
- * warn and continue so the launcher still opens offline.
- */
 export function Boot({ onReady }: { onReady: () => void }) {
   const [stages, setStages] = useState<Stage[]>(STAGES.map((label) => ({ label, status: "pending" })));
   const [fatal, setFatal] = useState<string | null>(null);
@@ -74,7 +69,6 @@ export function Boot({ onReady }: { onReady: () => void }) {
         if (["home", "library", "discover", "servers", "skins", "performance", "settings"].includes(start)) {
           useNav.setState({ page: start, params: {} });
         }
-        // Let the logo finish drawing on very fast machines (≈0.9s total).
         const elapsed = performance.now() - started.current;
         window.setTimeout(() => !cancelled && onReady(), Math.max(0, 900 - elapsed) + 250);
       } catch (e) {

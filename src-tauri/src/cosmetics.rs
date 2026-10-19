@@ -1,10 +1,3 @@
-//! Vitra cosmetics: the Vitra badge next to Vitra players' names, and free capes (animated ones
-//! too). The Vitra Cosmetics mod draws them in game; it ships inside Vitra and is added to Fabric
-//! instances at launch with `-Dfabric.addMods`, so players' mods folders stay untouched. Who uses
-//! Vitra and which cape they wear lives at api.xan.gripe. Ownership is proven with the key pair
-//! Mojang gives every account for chat signing: the access token only ever goes to Mojang, and the
-//! private key never leaves this computer.
-
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -27,7 +20,6 @@ use crate::state::AppState;
 use crate::util;
 
 const API: &str = "https://api.xan.gripe";
-/// The game's presence token is reused while it has at least this long left.
 const TOKEN_MARGIN_MS: i64 = 2 * 3600 * 1000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,15 +42,12 @@ pub struct Preset {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CosmeticsStatus {
-    /// The signed-in player's Vitra cape.
     pub cape: Option<VitraCape>,
     pub presets: Vec<Preset>,
-    /// Players in game on Vitra right now, and everyone who has used it (None if unknown).
     pub online: Option<u64>,
     pub players: Option<u64>,
 }
 
-/// (account uuid, token, expires at ms)
 static GAME_TOKEN: Mutex<Option<(String, String, i64)>> = Mutex::new(None);
 
 async fn api_error(resp: reqwest::Response) -> Error {
@@ -82,8 +71,6 @@ struct KeyPair {
     public_key: String,
 }
 
-/// Proof that we're this player, for `purpose` only: Mojang's signature over the account's public
-/// key, plus our signature (with the matching private key) over the purpose and the time.
 async fn proof(state: &AppState, uuid: &str, token: &str, purpose: &str) -> Result<Value> {
     let resp = state.http.post("https://api.minecraftservices.com/player/certificates").bearer_auth(token).send().await?;
     if !resp.status().is_success() {
@@ -91,7 +78,6 @@ async fn proof(state: &AppState, uuid: &str, token: &str, purpose: &str) -> Resu
     }
     let certs: Certificates = resp.json().await?;
     let b64 = base64::engine::general_purpose::STANDARD;
-    // Mojang labels these "RSA" PEM but they hold PKCS#8 / X.509 DER.
     let der = |pem: &str| b64.decode(pem.lines().filter(|l| !l.starts_with("-----")).collect::<String>());
     let private = der(&certs.key_pair.private_key).map_err(|_| Error::Msg("Mojang sent an unreadable key.".into()))?;
     let public = der(&certs.key_pair.public_key).map_err(|_| Error::Msg("Mojang sent an unreadable key.".into()))?;
@@ -112,14 +98,12 @@ async fn proof(state: &AppState, uuid: &str, token: &str, purpose: &str) -> Resu
     }))
 }
 
-/// The mod built for this game version, if Vitra ships one (26.3 and 26.3.x share a build).
 fn mod_jar(state: &AppState, game_version: &str) -> Option<PathBuf> {
     let line: Vec<&str> = game_version.split('.').take(2).collect();
     let name = format!("resources/mods/vitra-cosmetics-{}.jar", line.join("."));
     state.app.path().resolve(name, BaseDirectory::Resource).ok().filter(|p| p.is_file())
 }
 
-/// A token that lets the game tell api.xan.gripe "this player is on Vitra right now".
 async fn game_token(state: &AppState, identity: &Identity) -> Result<String> {
     if let Some((uuid, token, expires)) = GAME_TOKEN.lock().unwrap().clone() {
         if uuid == identity.uuid && expires - util::now_millis() > TOKEN_MARGIN_MS {
@@ -143,9 +127,6 @@ async fn game_token(state: &AppState, identity: &Identity) -> Result<String> {
     Ok(token)
 }
 
-/// Extra JVM arguments that add the Vitra Cosmetics mod to a Fabric instance, for badges and capes
-/// and for Memories (where moments happen, biomes, rare mobs). Never fails the launch: without the
-/// server the game just starts without our badge.
 pub async fn launch_args(state: &AppState, inst: &Instance, identity: &Identity) -> Vec<String> {
     let settings = state.settings();
     if !(settings.cosmetics || settings.memories) || inst.loader != "fabric" {
@@ -153,8 +134,6 @@ pub async fn launch_args(state: &AppState, inst: &Instance, identity: &Identity)
     }
     let Some(jar) = mod_jar(state, &inst.game_version) else { return vec![] };
     let mut args = vec![format!("-Dfabric.addMods={}", jar.display())];
-    // The mod also reports moments for Memories; with badges and capes off it draws nothing and
-    // never goes online.
     if settings.memories {
         args.push("-Dvitra.moments=true".into());
     }
@@ -169,7 +148,6 @@ pub async fn launch_args(state: &AppState, inst: &Instance, identity: &Identity)
     args
 }
 
-/// Whether Vitra can show badges and capes in this instance.
 #[tauri::command]
 pub fn cosmetics_supported(state: State<'_, Arc<AppState>>, loader: String, game_version: String) -> bool {
     loader == "fabric" && mod_jar(&state, &game_version).is_some()
@@ -177,7 +155,6 @@ pub fn cosmetics_supported(state: State<'_, Arc<AppState>>, loader: String, game
 
 #[tauri::command]
 pub async fn cosmetics_status(state: State<'_, Arc<AppState>>) -> Result<CosmeticsStatus> {
-    // Three independent requests, sent together. Only the presets are required.
     let presets = async {
         let resp = state.http.get(format!("{API}/v1/presets")).send().await?;
         if !resp.status().is_success() {
@@ -203,8 +180,6 @@ pub async fn cosmetics_status(state: State<'_, Arc<AppState>>) -> Result<Cosmeti
     Ok(CosmeticsStatus { cape, presets: presets?, online: stats["online"].as_u64(), players: stats["players"].as_u64() })
 }
 
-/// Deletes what api.xan.gripe keeps about the signed-in player: their record, their Vitra cape and
-/// the capes they uploaded (unless someone else wears the same one).
 #[tauri::command]
 pub async fn delete_vitra_data(state: State<'_, Arc<AppState>>) -> Result<()> {
     let (account, token) = auth::access_token(&state).await?;
@@ -222,8 +197,6 @@ pub async fn delete_vitra_data(state: State<'_, Arc<AppState>>) -> Result<()> {
     Ok(())
 }
 
-/// Sets the signed-in player's Vitra cape: a preset, an uploaded image (a PNG of 2:1 cape textures
-/// stacked top to bottom, base64), or none when both are missing.
 #[tauri::command]
 pub async fn set_vitra_cape(
     state: State<'_, Arc<AppState>>,

@@ -17,7 +17,6 @@ export function resolvedMotion(s: Settings): "full" | "reduced" | "off" {
 
 let lastScale = 1;
 
-/** Accent picked from the backdrop when the accent setting is "auto". */
 export const AUTO_ACCENT = "auto";
 const DEFAULT_ACCENT = "#7c9cff";
 let backdropAccent: string | null = null;
@@ -28,17 +27,11 @@ export function setBackdropAccent(hex: string | null, s: Settings | null) {
   if (s && s.accent === AUTO_ACCENT) applyAppearance(s);
 }
 
-/** The accent actually in use (resolves "auto"). */
 export function resolvedAccent(s: Settings): string {
   if (s.accent === AUTO_ACCENT) return backdropAccent ?? DEFAULT_ACCENT;
   return /^#[0-9a-f]{6}$/i.test(s.accent) ? s.accent : DEFAULT_ACCENT;
 }
 
-/**
- * Writes settings onto :root as CSS variables. Readability guards keep any
- * combination of sliders legible: very transparent panels get a minimum fill,
- * and low blur forces a more opaque fill (blur is what makes glass readable).
- */
 export function applyAppearance(s: Settings) {
   const root = document.documentElement;
   const theme = resolvedTheme(s);
@@ -74,7 +67,6 @@ export function applyAppearance(s: Settings) {
   const scale = Math.min(1.4, Math.max(0.8, s.uiScale));
   if (scale !== lastScale) {
     lastScale = scale;
-    // Native page zoom keeps layout, hit-testing and popover math consistent.
     getCurrentWebview().setZoom(scale).catch(() => {});
   }
   root.style.setProperty("--bg-dim", String(Math.min(0.9, Math.max(0, s.background.dim))));
@@ -85,11 +77,6 @@ function contrast(a: number, b: number) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-/**
- * The accent as text: mixed toward white (dark theme) or black (light theme)
- * until it reaches WCAG AA contrast (4.5:1) against the glass surfaces, so
- * any accent the user picks stays readable.
- */
 function readableAccent(rgb: [number, number, number], theme: "dark" | "light"): string {
   const surface = theme === "dark" ? luminance([22, 26, 40]) : luminance([246, 248, 252]);
   const target = theme === "dark" ? 255 : 0;

@@ -4,13 +4,11 @@
   gap: 10px;
 }
 
-/* ---------------------------------------------------------------- hero */
 .servers-hero {
   overflow: hidden;
   padding: 30px 32px;
   isolation: isolate;
 }
-/* The server's own icon, melted into a color wash behind the card. */
 .servers-hero-wash {
   position: absolute;
   inset: -40%;
@@ -70,7 +68,6 @@
   font-weight: 560;
 }
 
-/* ---------------------------------------------------------------- filters */
 .filter-chips {
   display: flex;
   flex-wrap: wrap;
@@ -119,7 +116,6 @@
   letter-spacing: -0.025em;
 }
 
-/* ---------------------------------------------------------------- cards */
 .server-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
@@ -210,7 +206,6 @@
   animation: none;
 }
 
-/* The MOTD sits in a dark well, like the in-game server list. */
 .server-motd {
   display: flex;
   flex-direction: column;
@@ -289,7 +284,6 @@
   background: var(--danger);
 }
 
-/* ---------------------------------------------------------------- hidden */
 .servers-hidden {
   display: flex;
   flex-direction: column;

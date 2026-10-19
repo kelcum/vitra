@@ -12,8 +12,6 @@ import { toast, useDialogs, useNav } from "../../lib/store";
 import type { InstanceView, ResourcePack, ShaderState } from "../../lib/types";
 import { TrashDialog, useFileDrop } from "./ContentTab";
 
-// ------------------------------------------------------------------ resource packs
-
 export function ResourcePacksTab({ instance }: { instance: InstanceView }) {
   const [packs, setPacks] = useState<ResourcePack[] | null>(null);
   const [enabled, setEnabled] = useState<string[]>([]);
@@ -191,8 +189,6 @@ function PackRow({ pack }: { pack: ResourcePack }) {
     </>
   );
 }
-
-// ------------------------------------------------------------------ shaders
 
 export function ShadersTab({ instance }: { instance: InstanceView }) {
   const [state, setState] = useState<ShaderState | null>(null);

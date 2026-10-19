@@ -1,12 +1,3 @@
-//! Parallel downloader.
-//!
-//! - Skips files that are already present (size match, or full SHA-1 when
-//!   `verify` is requested — used by "Repair").
-//! - Streams into `<file>.part` and resumes with HTTP Range after interruptions.
-//! - Verifies SHA-1 after every download; a mismatch is deleted and retried.
-//! - Retries transient failures with exponential backoff.
-//! - Reuses connections through a single shared `reqwest::Client`.
-
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -45,7 +36,6 @@ impl Download {
     }
 }
 
-/// True when the file on disk already satisfies the job.
 fn is_satisfied(job: &Download, verify: bool) -> bool {
     let Ok(meta) = std::fs::metadata(&job.path) else {
         return false;
@@ -65,8 +55,6 @@ fn is_satisfied(job: &Download, verify: bool) -> bool {
     true
 }
 
-/// Downloads every job that isn't already satisfied. Progress is reported on
-/// `task` within its current stage.
 pub async fn download_all(state: &AppState, task: &TaskHandle, jobs: Vec<Download>, verify: bool) -> Result<()> {
     let mut seen = HashSet::new();
     let jobs: Vec<Download> = jobs.into_iter().filter(|j| seen.insert(j.path.clone())).collect();
@@ -81,7 +69,6 @@ pub async fn download_all(state: &AppState, task: &TaskHandle, jobs: Vec<Downloa
         return Ok(());
     }
 
-    // Byte-accurate progress is only honest when every size is known.
     let all_sized = pending.iter().all(|j| j.size.is_some());
     let total_bytes = if all_sized { pending.iter().filter_map(|j| j.size).sum() } else { 0 };
     task.set_totals(pending.len() as u64, total_bytes);
@@ -131,7 +118,6 @@ async fn try_download(http: &reqwest::Client, task: &TaskHandle, job: &Download,
     let status = resp.status();
 
     if status == StatusCode::RANGE_NOT_SATISFIABLE {
-        // The partial file is already complete (or bogus) — verify decides.
         task.add_bytes(existing);
         *counted += existing;
     } else {
@@ -190,7 +176,6 @@ fn part_path(path: &Path) -> PathBuf {
     path.with_file_name(name)
 }
 
-/// GET + JSON decode with a couple of retries for flaky connections.
 pub async fn get_json<T: DeserializeOwned>(http: &reqwest::Client, url: &str) -> Result<T> {
     let mut attempt = 0;
     loop {
@@ -223,8 +208,6 @@ pub async fn get_bytes(http: &reqwest::Client, url: &str) -> Result<Vec<u8>> {
     Ok(resp.bytes().await?.to_vec())
 }
 
-/// Fetches JSON and caches it on disk. When offline, falls back to the cached
-/// copy so the launcher still works (e.g. launching already-installed versions).
 pub async fn cached_json<T: DeserializeOwned + serde::Serialize>(
     http: &reqwest::Client,
     url: &str,
@@ -242,7 +225,6 @@ pub async fn cached_json<T: DeserializeOwned + serde::Serialize>(
     }
 }
 
-/// Downloads a single small file (e.g. a version JSON) with verification.
 pub async fn fetch_file(http: &reqwest::Client, url: &str, path: &Path, sha1: Option<&str>) -> Result<()> {
     if let Some(expected) = sha1 {
         if path.exists() && util::sha1_file(path).map(|h| h.eq_ignore_ascii_case(expected)).unwrap_or(false) {

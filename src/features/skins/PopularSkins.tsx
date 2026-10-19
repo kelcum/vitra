@@ -7,10 +7,6 @@ import { api, errorMessage } from "../../lib/api";
 import { toast } from "../../lib/store";
 import type { FoundSkin, SavedSkin } from "../../lib/types";
 
-/**
- * Well-known players. Nobody publishes a list of the most-worn skins (NameMC's trending lists
- * aren't open to apps), so these are fetched live from Mojang: always each player's current skin.
- */
 const POPULAR = [
   "Technoblade", "Dream", "GeorgeNotFound", "Sapnap", "TommyInnit", "Tubbo",
   "Ph1LzA", "WilburSoot", "Ranboo", "Quackity", "Skeppy", "BadBoyHalo",
@@ -18,7 +14,6 @@ const POPULAR = [
   "Fundy", "Hbomb94", "Smajor1995", "Notch", "jeb_", "Dinnerbone",
 ];
 
-/** Lookups survive switching tabs; null means the player has no custom skin or doesn't exist. */
 const cache = new Map<string, FoundSkin | null>();
 const loaded = () => POPULAR.map((n) => cache.get(n)).filter((f): f is FoundSkin => !!f);
 
@@ -42,14 +37,12 @@ export function PopularSkins({
     let live = true;
     const todo = POPULAR.filter((n) => !cache.has(n));
     let next = 0;
-    // Three lookups at a time keeps well under Mojang's limits.
     const worker = async () => {
       while (live && next < todo.length) {
         const name = todo[next++];
         try {
           cache.set(name, await api.findPlayerSkin(name));
         } catch (e) {
-          // Remember players that don't exist or use a default skin; retry anything else later.
           if (/^No Minecraft player|default skins/.test(errorMessage(e))) cache.set(name, null);
         }
         if (live) setSkins(loaded());

@@ -35,7 +35,6 @@ export function CreateInstanceDialog() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset when opened.
   useEffect(() => {
     if (!open) return;
     setLoader((preset.loader as Loader) ?? settings?.defaultLoader ?? "fabric");
@@ -52,7 +51,6 @@ export function CreateInstanceDialog() {
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Minecraft versions the chosen loader supports.
   useEffect(() => {
     if (!open) return;
     setSupported(null);
@@ -79,7 +77,6 @@ export function CreateInstanceDialog() {
       }));
   }, [versions, snapshots, supported, loader]);
 
-  // Default to the newest available version for this loader.
   useEffect(() => {
     if (options.length && (!gameVersion || !options.some((o) => o.value === gameVersion))) {
       setGameVersion(options[0].value);

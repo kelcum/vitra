@@ -10,7 +10,6 @@ import { toast, useAccounts } from "../../lib/store";
 import type { NameChangeInfo, ProfileView } from "../../lib/types";
 import { NAME_RE, nameIdeas, nameProblem } from "./names";
 
-/** How many free names to suggest. */
 const IDEAS = 6;
 const DAY_MS = 86_400_000;
 
@@ -18,16 +17,11 @@ const longDate = (ms: number) => new Date(ms).toLocaleDateString(undefined, { mo
 
 type Result = {
   name: string;
-  /** "yours" when it's already your name; null when Mojang paused before checking it. */
   status: "available" | "taken" | "not_allowed" | "invalid" | "yours" | null;
   ideas: string[];
   limited: boolean;
 };
 
-/**
- * Change your Minecraft name without going to minecraft.net. Checks the name with Mojang and, when
- * it's taken, suggests the closest names that are still free.
- */
 export function NameChangeDialog({
   open,
   current,
@@ -75,7 +69,6 @@ export function NameChangeDialog({
       const self = r.results.find((x) => x.name === typed);
       setResult({
         name: typed,
-        // "unknown": Mojang didn't answer for this one.
         status: own ? "yours" : !valid ? "invalid" : self && self.status !== "unknown" ? self.status : null,
         ideas: r.results.filter((x) => x.status === "available" && x.name !== typed).map((x) => x.name).slice(0, IDEAS),
         limited: r.limited,

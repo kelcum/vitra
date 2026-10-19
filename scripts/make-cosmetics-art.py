@@ -28,8 +28,6 @@ def shade(c, k):
     return tuple(max(0, min(255, int(v * k))) for v in c[:3]) + (c[3] if len(c) > 3 else 255,)
 
 
-# Which pixels of the elytra area (x 22-45, y 0-21 of a 64x32 cape texture) are wing. Everything
-# else must stay transparent, or the elytra renders as solid slabs. Taken from a standard cape template.
 ELYTRA_MASK = [
     ".........#########......",
     "..........##............",
@@ -66,14 +64,12 @@ def cape_frame(design, t, s):
             for x in range(x0 * s, (x0 + w) * s):
                 px[x, y] = fn((x - x0 * s + .5) / (w * s), (y - y0 * s + .5) / (h * s))
 
-    paint(1, 1, 10, 16, lambda u, v: design(u, v, t))                       # outside, what others see
-    paint(12, 1, 10, 16, lambda u, v: shade(design(1 - u, v, t), .55))      # inside, against your back
-    paint(0, 1, 1, 16, lambda u, v: shade(design(0, v, t), .7))             # edges
+    paint(1, 1, 10, 16, lambda u, v: design(u, v, t))
+    paint(12, 1, 10, 16, lambda u, v: shade(design(1 - u, v, t), .55))
+    paint(0, 1, 1, 16, lambda u, v: shade(design(0, v, t), .7))
     paint(11, 1, 1, 16, lambda u, v: shade(design(1, v, t), .7))
-    paint(1, 0, 10, 1, lambda u, v: shade(design(u, 0, t), .85))            # top and bottom
+    paint(1, 0, 10, 1, lambda u, v: shade(design(u, 0, t), .85))
     paint(11, 0, 10, 1, lambda u, v: shade(design(u, 1, t), .6))
-    # Elytra wings: the design spans the wing's outer face (x 34-45), then everything outside the
-    # wing shape is cut away.
     for y in range(0, 22 * s):
         for x in range(22 * s, 46 * s):
             if ELYTRA_MASK[y // s][x // s - 22] == "#":
@@ -90,12 +86,10 @@ def strip(frames):
     return out
 
 
-# ── designs ────────────────────────────────────────────────────────────────
-
 def glass(u, v, t):
     """Vitra's glass cube colours, with a sheen sweeping across."""
     base = lerp((96, 140, 255), (139, 92, 246), v * .8 + u * .2)
-    d = (u + v * .55) - (t * 2.4 - .6)                     # diagonal band position
+    d = (u + v * .55) - (t * 2.4 - .6)
     sheen = math.exp(-(d * d) / .006)
     edge = 1 - min(u, 1 - u, v, 1 - v)
     rim = .35 if min(u, 1 - u) < .07 or min(v, 1 - v) < .045 else 0
@@ -113,16 +107,15 @@ def aurora(u, v, t):
     c = sky
     for sx, sy, i in STARS:
         sx = (sx * (i * 7.31)) % 1
-        if ((u - sx) * 10) ** 2 + ((v - sy) * 16) ** 2 < .1 * (1 + .5 * math.sin(T + i)):   # in cape pixels
+        if ((u - sx) * 10) ** 2 + ((v - sy) * 16) ** 2 < .1 * (1 + .5 * math.sin(T + i)):
             c = (220, 230, 255)
-    # each curtain is a wavy band hanging from the top that fades out downward
     glow = 0
     for k, (f, ph, off) in enumerate([(3.1, 0, .32), (2.3, 2.1, .52), (4.2, 4.0, .7)]):
         x = off + math.sin(v * f + T + ph) * .12 + math.sin(v * 7 - T * 2 + k) * .03
         d = abs(u - x)
         glow += math.exp(-d * d / .006) * (1 - v) ** 1.3 * (.8 + .2 * math.sin(T * 2 + k * 2 + v * 9))
     glow = min(1, glow)
-    top = max(0, .35 - v) * 2                               # violet fringe at the top of the curtains
+    top = max(0, .35 - v) * 2
     col = lerp((40, 255, 150), (150, 90, 255), min(1, top * glow * 1.6))
     return lerp(c, col, glow * .95) + (255,)
 
@@ -136,7 +129,7 @@ def ember(u, v, t):
     heat = max(0, min(1, (1 - v) * .2 + v * .95 + flick * .18 - .1))
     c = lerp((22, 4, 2), (196, 38, 10), min(1, heat * 1.4))
     c = lerp(c, (255, 176, 50), max(0, heat - .55) * 2)
-    for sx, sy, sp in SPARKS:                               # sparks drifting up
+    for sx, sy, sp in SPARKS:
         y = (sy - t * sp) % 1
         d = (u - sx) ** 2 * 4 + (v - y) ** 2 * 16
         if d < .004:
@@ -152,7 +145,7 @@ def sakura(u, v, t):
     for px_, py, sp, ph in PETALS:
         y = (py + t * sp) % 1.1 - .05
         x = px_ + math.sin(t * 6.28 + ph) * .07
-        a = ph + t * 6.28 * .5                              # petals turn as they fall
+        a = ph + t * 6.28 * .5
         dx, dy = (u - x) * .625, (v - y)
         rx, ry = dx * math.cos(a) + dy * math.sin(a), -dx * math.sin(a) + dy * math.cos(a)
         e = (rx / .06) ** 2 + (ry / .03) ** 2
@@ -213,9 +206,9 @@ def vitra_cube(size):
     d = ImageDraw.Draw(big)
     c, top, mid, bot = S / 2, S * .06, S * .32, S * .94
     left, right = S * .1, S * .9
-    d.polygon([(c, top), (right, top + (mid - top)), (c, mid * 2 - top), (left, mid)], fill=(168, 205, 255, 255))   # top face
-    d.polygon([(left, mid), (c, mid * 2 - top), (c, bot), (left, bot - (mid - top))], fill=(86, 118, 246, 255))       # left face
-    d.polygon([(right, mid), (c, mid * 2 - top), (c, bot), (right, bot - (mid - top))], fill=(122, 82, 232, 255))     # right face
+    d.polygon([(c, top), (right, top + (mid - top)), (c, mid * 2 - top), (left, mid)], fill=(168, 205, 255, 255))
+    d.polygon([(left, mid), (c, mid * 2 - top), (c, bot), (left, bot - (mid - top))], fill=(86, 118, 246, 255))
+    d.polygon([(right, mid), (c, mid * 2 - top), (c, bot), (right, bot - (mid - top))], fill=(122, 82, 232, 255))
     d.line([(c, mid * 2 - top), (c, bot)], fill=(214, 226, 255, 255), width=max(2, S // 40))
     d.line([(left, mid), (c, mid * 2 - top), (right, mid)], fill=(232, 240, 255, 255), width=max(2, S // 40))
     return big.resize((size, size), Image.LANCZOS)
@@ -229,19 +222,17 @@ def owner_badge_frame(i):
     the same after 90 degrees, so it loops seamlessly), colours sweeping through the rainbow, with a
     glow and a sparkle that twinkles at its corner."""
     cw, ch = OWNER_CELL
-    S = 8                                                   # draw big, then scale down for smooth edges
+    S = 8
     W, H = cw * S, ch * S
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     t = i / OWNER_FRAMES
-    hue = t                                                  # one full colour cycle per loop
+    hue = t
 
-    # glow behind the cube
     glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     r, g, b = [int(v * 255) for v in colorsys.hsv_to_rgb(hue % 1, .55, 1)]
     ImageDraw.Draw(glow).ellipse([W * .5 - H * .47, H * .05, W * .5 + H * .47, H * .99], fill=(r, g, b, 120))
     img.alpha_composite(glow.filter(ImageFilter.GaussianBlur(H * .09)))
 
-    # the cube: rotate around the vertical axis, tilt towards the viewer, project orthographically
     a, tilt = t * math.pi / 2 + math.pi / 4, math.radians(-30)
     pts = []
     for x in (-1, 1):
@@ -262,20 +253,19 @@ def owner_badge_frame(i):
         nx, ny, nz = uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx
         ln = math.sqrt(nx * nx + ny * ny + nz * nz)
         nx, ny, nz = nx / ln, ny / ln, nz / ln
-        if nz < 0:                                           # face points away from us
+        if nz < 0:
             nx, ny, nz = -nx, -ny, -nz
             continue
         depth = sum(pts[j][2] for j in f) / 4
         drawn.append((depth, f, (nx, ny, nz), k))
     for depth, f, (nx, ny, nz), k in sorted(drawn):
-        shade = .5 + .5 * max(0, nx * light[0] + ny * light[1] + nz * light[2])   # lit from the top left
-        fh = (hue + k * .13) % 1                              # each face a little further round the rainbow
+        shade = .5 + .5 * max(0, nx * light[0] + ny * light[1] + nz * light[2])
+        fh = (hue + k * .13) % 1
         r, g, b = colorsys.hsv_to_rgb(fh, .62 - .25 * (ny < -.5), min(1, shade))
         poly = [(cx + pts[j][0] * size, cy + pts[j][1] * size) for j in f]
         d.polygon(poly, fill=(int(r * 255), int(g * 255), int(b * 255), 255))
         d.line(poly + [poly[0]], fill=(255, 255, 255, 235), width=int(S * 1.15))
 
-    # sweep of light across the cube
     sweep = Image.new("L", (W, H), 0)
     sx = W * (-.2 + 1.4 * ((t * 2) % 1))
     ImageDraw.Draw(sweep).polygon([(sx, 0), (sx + W * .12, 0), (sx - W * .08, H), (sx - W * .2, H)], fill=110)
@@ -284,7 +274,6 @@ def owner_badge_frame(i):
     shine.putalpha(Image.composite(sweep, Image.new("L", (W, H), 0), cube_alpha))
     img.alpha_composite(shine)
 
-    # sparkle: a four-pointed star at the top right that grows and fades
     tw = math.sin(t * 2 * math.pi * 2)
     if tw > 0:
         k = tw
@@ -294,8 +283,6 @@ def owner_badge_frame(i):
         d.polygon(star, fill=(255, 255, 255, int(255 * min(1, k * 1.3))))
 
     out = img.resize(OWNER_CELL, Image.LANCZOS)
-    # Minecraft sizes a glyph by its rightmost visible column; an all-but-invisible pixel there keeps
-    # every frame the same width so the name doesn't wobble.
     if out.getpixel((cw - 1, 0))[3] == 0:
         out.putpixel((cw - 1, 0), (255, 255, 255, 1))
     return out

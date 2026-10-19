@@ -101,7 +101,6 @@ export function Tabs<T extends string>({
   );
 }
 
-/** Circular progress used by the Play button and the downloads indicator. */
 export function ProgressRing({ value, size = 22, stroke = 2.5 }: { value: number | null; size?: number; stroke?: number }) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;

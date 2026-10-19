@@ -1,5 +1,3 @@
-//! Modrinth API v2 client. https://docs.modrinth.com/api/
-
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -121,7 +119,6 @@ pub async fn projects(state: &AppState, ids: &[String]) -> Result<Vec<MrProject>
     Ok(out)
 }
 
-/// Identifies files by SHA-1. Returns hash → version.
 pub async fn versions_by_hash(state: &AppState, hashes: &[String]) -> Result<HashMap<String, MrVersion>> {
     if hashes.is_empty() {
         return Ok(HashMap::new());
@@ -138,7 +135,6 @@ pub async fn versions_by_hash(state: &AppState, hashes: &[String]) -> Result<Has
     Ok(resp.json().await?)
 }
 
-/// Latest compatible version for each file hash.
 pub async fn latest_by_hash(
     state: &AppState,
     hashes: &[String],
@@ -174,8 +170,6 @@ pub struct SearchParams {
     pub limit: u32,
 }
 
-/// Search results are passed through as JSON — the UI renders Modrinth's
-/// fields directly.
 #[tauri::command]
 pub async fn modrinth_search(state: State<'_, Arc<AppState>>, params: SearchParams) -> Result<Value> {
     let mut facets: Vec<Vec<String>> = vec![vec![format!("project_type:{}", params.project_type)]];

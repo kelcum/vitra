@@ -28,7 +28,6 @@
   min-width: 0;
 }
 
-/* ---------------------------------------------------------------- cover */
 .instance-cover {
   position: relative;
   height: 128px;
@@ -37,7 +36,6 @@
   background: rgb(var(--tint) / 0.5);
 }
 .instance-cover::after {
-  /* Melts the picture into the card. */
   content: "";
   position: absolute;
   inset: 0;

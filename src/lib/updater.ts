@@ -3,17 +3,11 @@ import { create } from "zustand";
 import { errorMessage } from "./api";
 import { useDialogs, useSettings } from "./store";
 
-/**
- * Self-updates through Tauri's updater: xan.gripe/vitra/updates/latest.json
- * names the newest version, and its installer must carry a signature made
- * with Vitra's private key or it's refused.
- */
 type Status = "idle" | "checking" | "current" | "available" | "downloading" | "installing" | "error";
 
 interface UpdateStore {
   status: Status;
   update: Update | null;
-  /** 0–1 while downloading, null when the size isn't known. */
   progress: number | null;
   error: string | null;
   lastChecked: number | null;
@@ -29,7 +23,6 @@ export const useUpdate = create<UpdateStore>(() => ({
 
 let inFlight: Promise<void> | null = null;
 
-/** Looks for a newer version. `silent` checks don't surface errors. */
 export function checkForUpdates({ silent }: { silent: boolean }): Promise<void> {
   if (inFlight) return inFlight;
   const { status } = useUpdate.getState();
@@ -55,7 +48,6 @@ export function checkForUpdates({ silent }: { silent: boolean }): Promise<void> 
   return inFlight;
 }
 
-/** Downloads, verifies and installs. Vitra closes and reopens on the new version. */
 export async function installUpdate() {
   const { update } = useUpdate.getState();
   if (!update) return;
@@ -73,7 +65,6 @@ export async function installUpdate() {
         useUpdate.setState({ status: "installing", progress: 1 });
       }
     });
-    // Windows exits here and the installer reopens Vitra when it's done.
   } catch (e) {
     useUpdate.setState({ status: "error", error: errorMessage(e) });
   }
@@ -83,14 +74,12 @@ const SIX_HOURS = 6 * 60 * 60 * 1000;
 let started = false;
 let shownThisSession = false;
 
-/** Called once after startup: a quiet check now and every six hours. */
 export function startUpdateChecks() {
   if (started) return;
   started = true;
   const tick = async () => {
     if (!(useSettings.getState().settings?.checkUpdates ?? true)) return;
     await checkForUpdates({ silent: true });
-    // Point it out once per session; after that the top-bar pill stays.
     if (useUpdate.getState().status === "available" && !shownThisSession) {
       shownThisSession = true;
       useDialogs.getState().set({ update: true });

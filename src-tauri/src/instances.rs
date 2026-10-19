@@ -1,6 +1,3 @@
-//! Instances ("profiles"): independent game directories with their own mods,
-//! config, resource packs, worlds, Java and memory settings.
-
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -51,20 +48,16 @@ pub struct Instance {
     pub created_at: i64,
     pub last_played: Option<i64>,
     pub play_time_secs: u64,
-    /// `None` = pick the right Mojang runtime automatically.
     pub java_path: Option<String>,
-    /// `None` = use the launcher default.
     pub memory_mb: Option<u32>,
     pub jvm_preset: String,
     pub jvm_args: String,
     pub game_args: String,
     pub window: WindowSettings,
     pub game_dir: Option<String>,
-    /// Resolved version id (e.g. `fabric-loader-0.19.5-1.21.1`) once installed.
     pub installed_version: Option<String>,
     pub performance_preset: Option<String>,
     pub modpack: Option<ModpackRef>,
-    /// Source folder when imported from another launcher.
     pub imported_from: Option<String>,
 }
 
@@ -101,7 +94,6 @@ pub struct InstanceView {
     #[serde(flatten)]
     pub instance: Instance,
     pub path: String,
-    /// Where the game actually runs (custom folder or the default one).
     pub resolved_game_dir: String,
     pub running: bool,
 }
@@ -159,8 +151,6 @@ pub fn list_all(state: &AppState) -> Vec<Instance> {
     if let Ok(entries) = std::fs::read_dir(state.instances_dir()) {
         for e in entries.flatten() {
             if let Ok(mut inst) = util::read_json::<Instance>(&e.path().join("instance.json")) {
-                // The folder is the instance's identity. A folder copied by hand keeps the original's id
-                // inside, and deleting "the copy" would then delete the original's folder.
                 let folder = e.file_name().to_string_lossy().to_string();
                 if inst.id != folder {
                     inst.id = folder;
@@ -248,7 +238,6 @@ pub fn update_instance(state: State<'_, Arc<AppState>>, instance: Instance) -> R
         }
     }
     let mut updated = instance;
-    // Changing version or loader invalidates the resolved install.
     if updated.game_version != existing.game_version
         || updated.loader != existing.loader
         || updated.loader_version != existing.loader_version
@@ -257,7 +246,6 @@ pub fn update_instance(state: State<'_, Arc<AppState>>, instance: Instance) -> R
     } else {
         updated.installed_version = existing.installed_version.clone();
     }
-    // Fields owned by the launcher, not the editor.
     updated.created_at = existing.created_at;
     updated.play_time_secs = existing.play_time_secs;
     updated.last_played = existing.last_played;
@@ -266,7 +254,6 @@ pub fn update_instance(state: State<'_, Arc<AppState>>, instance: Instance) -> R
     let folder_changed = updated.game_dir != existing.game_dir;
     save(&state, &updated)?;
     if folder_changed {
-        // Let the UI show world icons and screenshots from the new folder right away.
         crate::allow_asset_dirs(&state);
     }
     Ok(view(&state, updated))
@@ -290,7 +277,6 @@ pub async fn duplicate_instance(state: State<'_, Arc<AppState>>, id: String, nam
         let from = instance_dir(&st, &source.id);
         let to = instance_dir(&st, &copy.id);
         util::copy_dir_recursive(&from, &to)?;
-        // A custom game dir would be shared; the copy gets its own.
         if let Some(custom) = &source.game_dir {
             util::copy_dir_recursive(Path::new(custom), &to.join("minecraft"))?;
             copy.game_dir = None;
@@ -322,8 +308,6 @@ pub async fn delete_instance(state: State<'_, Arc<AppState>>, id: String) -> Res
     Ok(())
 }
 
-/// Adds `dir` to the zip, named relative to `base` and placed under `prefix` ("" or "folder/"),
-/// leaving out `skip`.
 fn zip_dir(writer: &mut zip::ZipWriter<std::fs::File>, base: &Path, dir: &Path, prefix: &str, skip: Option<&Path>) -> Result<()> {
     let options = zip::write::SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
@@ -339,7 +323,6 @@ fn zip_dir(writer: &mut zip::ZipWriter<std::fs::File>, base: &Path, dir: &Path, 
             writer.add_directory(format!("{rel}/"), options)?;
             zip_dir(writer, base, &path, prefix, skip)?;
         } else {
-            // Skip the session lock Minecraft holds while a world is open.
             if rel.ends_with("session.lock") {
                 continue;
             }
@@ -365,8 +348,6 @@ pub async fn backup_instance(state: State<'_, Arc<AppState>>, id: String) -> Res
         let file = std::fs::File::create(&out)?;
         let mut writer = zip::ZipWriter::new(file);
         let dir = instance_dir(&st, &inst.id);
-        // A custom game folder goes where the default one would be (instead of it), so the backup
-        // restores the same way.
         let custom = inst.game_dir.as_ref().filter(|d| !d.trim().is_empty()).map(PathBuf::from).filter(|c| !c.starts_with(&dir));
         let default_game = dir.join("minecraft");
         zip_dir(&mut writer, &dir, &dir, "", custom.as_ref().map(|_| default_game.as_path()))?;
@@ -459,12 +440,10 @@ pub fn recent_screenshots(state: State<'_, Arc<AppState>>, limit: usize) -> Vec<
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Cover {
-    /// "screenshot" (a full picture) or "world" (a 64×64 world icon).
     pub kind: &'static str,
     pub path: String,
 }
 
-/// A picture for each instance's library card: its newest screenshot, else its latest world's icon.
 #[tauri::command]
 pub fn instance_covers(state: State<'_, Arc<AppState>>) -> std::collections::HashMap<String, Cover> {
     let mut out = std::collections::HashMap::new();

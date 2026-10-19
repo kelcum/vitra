@@ -4,8 +4,6 @@
   align-items: start;
   gap: 14px;
 }
-/* Sized to the window and pinned while the panels beside it scroll, so the whole player (and the
-   cape) is always in view. */
 .skin-stage {
   position: sticky;
   top: 0;
@@ -24,7 +22,6 @@
   pointer-events: none;
 }
 .skin-stage::after {
-  /* floor reflection */
   content: "";
   position: absolute;
   left: 25%;
@@ -126,7 +123,6 @@
   width: 30px;
   height: 48px;
   image-rendering: pixelated;
-  /* Cape textures are 64×32; the front face is 10×16 at (1,1). Scale ×3. */
   background-size: 192px 96px;
   background-position: -3px -3px;
   border-radius: 3px;
@@ -210,7 +206,6 @@
   }
 }
 
-/* ---------------------------------------------------------------- OptiFine */
 .of-cape {
   display: flex;
   align-items: center;
@@ -245,7 +240,6 @@
   color: var(--text-2);
 }
 
-/* ---------------------------------------------------------------- find */
 .quick-picks {
   display: flex;
   flex-wrap: wrap;
@@ -302,7 +296,6 @@
   letter-spacing: -0.02em;
 }
 
-/* ---------------------------------------------------------------- popular */
 .popular-actions {
   display: flex;
   align-items: center;
@@ -316,7 +309,6 @@ button.skin-card {
   color: inherit;
 }
 
-/* ---------------------------------------------------------------- name change */
 .name-verdict {
   display: flex;
   align-items: center;

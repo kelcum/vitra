@@ -1,7 +1,3 @@
-//! Servers page: a curated list of large public servers, the player's own
-//! servers, which ones are hidden, and live status via the vanilla Server
-//! List Ping protocol (the same request the in-game multiplayer screen sends).
-
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -107,7 +103,6 @@ fn entries(store: &ServerStore) -> Vec<ServerEntry> {
     out
 }
 
-/// The name of the server at `address` in Vitra's list (featured or your own), if it's there.
 pub(crate) fn name_for(state: &AppState, address: &str) -> Option<String> {
     let same = |a: &str, b: &str| a.trim_end_matches('.').eq_ignore_ascii_case(b.trim_end_matches('.'));
     let (host, port) = split_address(address).ok()?;
@@ -121,7 +116,6 @@ pub(crate) fn name_for(state: &AppState, address: &str) -> Option<String> {
         .map(|e| e.name)
 }
 
-/// `host` or `host:port`; hostnames, IPv4 and bracketed IPv6.
 fn split_address(address: &str) -> Result<(String, Option<u16>)> {
     let a = address.trim();
     if a.is_empty() {
@@ -209,8 +203,6 @@ pub fn set_server_hidden(state: State<'_, Arc<AppState>>, id: String, hidden: bo
     save_store(&state, &store)
 }
 
-// ------------------------------------------------------------------ ping
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerStatus {
@@ -219,9 +211,7 @@ pub struct ServerStatus {
     pub protocol: i64,
     pub players_online: i64,
     pub players_max: i64,
-    /// Raw `description`: a string with § codes or a chat component.
     pub motd: serde_json::Value,
-    /// `data:image/png;base64,...`
     pub favicon: Option<String>,
 }
 
@@ -259,8 +249,6 @@ async fn read_varint(stream: &mut TcpStream) -> Result<i32> {
     bail!("The server sent an invalid response.")
 }
 
-/// One shared resolver (it caches answers). Nameservers are queried in
-/// parallel with a short timeout: one slow DNS server shouldn't stall the page.
 fn resolver() -> Option<&'static hickory_resolver::TokioResolver> {
     static RESOLVER: std::sync::OnceLock<Option<hickory_resolver::TokioResolver>> = std::sync::OnceLock::new();
     RESOLVER
@@ -275,8 +263,6 @@ fn resolver() -> Option<&'static hickory_resolver::TokioResolver> {
         .as_ref()
 }
 
-/// Where to connect: an explicit port wins, then the `_minecraft._tcp` SRV
-/// record (what the game itself checks), then port 25565.
 async fn resolve(host: &str, port: Option<u16>) -> (String, u16) {
     if let Some(p) = port {
         return (host.to_string(), p);
@@ -306,7 +292,6 @@ pub(crate) async fn ping(address: &str) -> Result<ServerStatus> {
     };
     let _ = stream.set_nodelay(true);
 
-    // Handshake (next state = status), then a status request.
     let mut hs = Vec::new();
     write_varint(&mut hs, -1);
     write_varint(&mut hs, host.len() as i32);
@@ -332,7 +317,6 @@ pub(crate) async fn ping(address: &str) -> Result<ServerStatus> {
         stream.read_exact(&mut json).await?;
         let status_rtt = sent.elapsed();
 
-        // Ping/pong gives a cleaner latency; fall back to the status round trip.
         let started = Instant::now();
         let latency = async {
             stream.write_all(&packet(0x01, &42i64.to_be_bytes())).await?;
@@ -390,7 +374,6 @@ mod tests {
         assert!(split_address("").is_err());
     }
 
-    /// Network check against the featured list: `cargo test -- --ignored live_ping`.
     #[tokio::test]
     #[ignore]
     async fn live_ping() {

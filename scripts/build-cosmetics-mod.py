@@ -30,7 +30,7 @@ def data_dir():
     candidates += [
         os.path.expanduser("~/Library/Application Support/app.vitra.launcher"),
         os.path.expanduser("~/.local/share/app.vitra.launcher"),
-        os.path.expanduser("~/.cache/vitra-data"),       # a development copy
+        os.path.expanduser("~/.cache/vitra-data"),
     ]
     for c in candidates:
         if c and os.path.isdir(os.path.join(c, "versions", MC)):
@@ -70,7 +70,7 @@ def classpath():
         jars.append(os.path.join(DATA, "libraries", maven_path(lib["name"])))
     if not os.path.exists(jars[0]):
         sys.exit(f"Minecraft {MC} isn't installed in {DATA}. Launch an instance of it once.")
-    return [j for j in jars if os.path.exists(j)]   # libraries for other operating systems aren't installed, and aren't needed
+    return [j for j in jars if os.path.exists(j)]
 
 
 def main():

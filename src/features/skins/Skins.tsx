@@ -20,14 +20,8 @@ import { VitraCapePanel } from "./VitraCapePanel";
 import "./skins.css";
 
 const APPLIED_KEY = "vitra.appliedSkin";
-/** Modrinth project of the Capes mod, which draws OptiFine capes in game. */
 const CAPES_MOD = "89Wsn8GD";
 
-/**
- * OptiFine capes come as 46×22 (or 92×44, …) images laid out like a vanilla
- * cape; OptiFine pads them onto a 64×32 (or 128×64, …) canvas, so do the same
- * before handing them to the 3D viewer.
- */
 async function padOptifineCape(src: string): Promise<string> {
   const img = new Image();
   img.src = src;
@@ -62,10 +56,8 @@ export default function Skins() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ id: string | null; src: string; model: "classic" | "slim" } | null>(null);
   const [capeId, setCapeId] = useState<string | null>(null);
-  // undefined while loading, null when the account has no OptiFine cape.
   const [ofCape, setOfCape] = useState<string | null | undefined>(undefined);
   const [ofPreview, setOfPreview] = useState(false);
-  // undefined = not previewing a Vitra cape; null = previewing "no Vitra cape".
   const [vitraPreview, setVitraPreview] = useState<AnimatedCape | null | undefined>(undefined);
   const [view, setView] = useState<ViewAngle>("showcase");
   const [viewNonce, setViewNonce] = useState(0);
@@ -105,7 +97,6 @@ export default function Skins() {
       .catch(() => setOfCape(null));
   }, [account?.uuid]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Initial preview: the account's live skin, else the first saved one.
   useEffect(() => {
     if (preview) return;
     if (profile?.skinDataUrl) setPreview({ id: null, src: profile.skinDataUrl, model: profile.skinModel });
@@ -117,7 +108,6 @@ export default function Skins() {
       const stored = JSON.parse(localStorage.getItem(APPLIED_KEY) ?? "null");
       if (stored && profile?.skinDataUrl && stored.profileHash === hash(profile.skinDataUrl)) return stored.id as string;
     } catch {
-      /* storage unavailable */
     }
     return null;
   }, [profile]);
@@ -144,7 +134,6 @@ export default function Skins() {
         try {
           localStorage.setItem(APPLIED_KEY, JSON.stringify({ id: skin.id, profileHash: hash(p.skinDataUrl) }));
         } catch {
-          /* storage unavailable */
         }
       }
       toast.success("Skin updated", "It shows up in-game the next time you join a world or server.");
@@ -170,7 +159,6 @@ export default function Skins() {
   };
 
   const current = preview ?? { id: null, src: fallback, model: "classic" as const };
-  // Turn the model around when a cape is picked, so you see it.
   const showCape = () => {
     setView("showcase");
     setViewNonce((n) => n + 1);
@@ -562,7 +550,6 @@ function RenameDialog({ skin, onClose, onSaved }: { skin: SavedSkin | null; onCl
   );
 }
 
-/** The visible front of a cape texture (10×16 region at 1,1). */
 function CapeFront({ src }: { src: string }) {
   return (
     <span
@@ -573,8 +560,6 @@ function CapeFront({ src }: { src: string }) {
     />
   );
 }
-
-// ------------------------------------------------------------------ OptiFine
 
 function OptifineCape({
   cape,
@@ -643,7 +628,6 @@ function OptifineCape({
   );
 }
 
-/** Whether the selected instance can draw OptiFine capes, with a one-click fix. */
 function CapesInGame() {
   const instance = useSelectedInstance();
   const contentVersion = useContentVersion((s) => s.v);
@@ -706,11 +690,8 @@ function CapesInGame() {
   );
 }
 
-// ------------------------------------------------------------------ find
-
 const QUICK_PICKS = ["Notch", "jeb_", "Dinnerbone", "Technoblade", "Dream", "Grian"];
 
-/** Finds skins by player name (Mojang's public profiles) or by link. */
 function FindSkins({
   previewing,
   onPreview,

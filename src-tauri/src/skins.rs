@@ -1,7 +1,3 @@
-//! Local skin library plus the official Minecraft profile API for applying
-//! skins and choosing capes. Capes are whatever Mojang has granted the
-//! account; Vitra can't create new ones.
-
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -20,7 +16,6 @@ use crate::util;
 pub struct SavedSkin {
     pub id: String,
     pub name: String,
-    /// "classic" (4px arms) or "slim" (3px arms).
     pub model: String,
     pub added_at: i64,
 }
@@ -72,8 +67,6 @@ fn validate_skin(bytes: &[u8]) -> Result<()> {
     }
 }
 
-/// Mojang texture URLs are cached locally and handed to the 3D viewer as data
-/// URLs (textures.minecraft.net doesn't allow cross-origin requests).
 async fn texture_data_url(state: &AppState, url: &str) -> Option<String> {
     let url = url.replace("http://", "https://");
     let cache = state.cache_dir().join("textures").join(format!("{}.png", util::sha1_bytes(url.as_bytes())));
@@ -96,7 +89,6 @@ pub fn list_skins(state: State<'_, Arc<AppState>>) -> Vec<SavedSkinView> {
         .collect()
 }
 
-/// Validates a skin PNG and adds it to the front of the library.
 fn add_to_library(state: &AppState, bytes: &[u8], name: &str, model: &str) -> Result<SavedSkinView> {
     validate_skin(bytes)?;
     let skin = SavedSkin {
@@ -165,7 +157,6 @@ async fn profile_view(state: &AppState, profile: McProfile) -> ProfileView {
     }
 }
 
-/// The signed-in account's live skin and capes.
 #[tauri::command]
 pub async fn get_profile(state: State<'_, Arc<AppState>>) -> Result<ProfileView> {
     let (_, token) = auth::access_token(&state).await?;
@@ -176,15 +167,12 @@ pub async fn get_profile(state: State<'_, Arc<AppState>>) -> Result<ProfileView>
     Ok(profile_view(&state, profile).await)
 }
 
-/// Saves the profile's name to the account list. Not saving it only means an older name until the
-/// next profile read, so a failed write mustn't fail the Mojang request that already worked.
 fn keep_account_name(state: &AppState, profile: &McProfile) {
     if let Err(e) = auth::sync_account_name(state, &profile.id, &profile.name) {
         log::warn!("Couldn't save the account name: {e}");
     }
 }
 
-/// Uploads a saved skin to the account. It shows up in-game everywhere.
 #[tauri::command]
 pub async fn apply_skin(state: State<'_, Arc<AppState>>, id: String) -> Result<ProfileView> {
     let skin = load_index(&state).into_iter().find(|s| s.id == id).ok_or("Skin not found")?;
@@ -210,7 +198,6 @@ pub async fn apply_skin(state: State<'_, Arc<AppState>>, id: String) -> Result<P
     Ok(profile_view(&state, profile).await)
 }
 
-/// Shows the given cape, or hides capes entirely when `cape_id` is `None`.
 #[tauri::command]
 pub async fn set_cape(state: State<'_, Arc<AppState>>, cape_id: Option<String>) -> Result<ProfileView> {
     let (_, token) = auth::access_token(&state).await?;
@@ -226,7 +213,6 @@ pub async fn set_cape(state: State<'_, Arc<AppState>>, cape_id: Option<String>) 
     Ok(profile_view(&state, profile).await)
 }
 
-/// Saves the account's current skin into the local library.
 #[tauri::command]
 pub async fn save_current_skin(state: State<'_, Arc<AppState>>) -> Result<SavedSkinView> {
     let (account, token) = auth::access_token(&state).await?;
@@ -237,9 +223,6 @@ pub async fn save_current_skin(state: State<'_, Arc<AppState>>) -> Result<SavedS
     add_to_library(&state, &bytes, &format!("{}'s skin", account.name), if slim { "slim" } else { "classic" })
 }
 
-// ------------------------------------------------------------------ name changes
-
-/// Mojang allows one name change every 30 days.
 const NAME_CHANGE_DAYS: i64 = 30;
 
 fn valid_new_name(name: &str) -> bool {
@@ -250,13 +233,10 @@ fn valid_new_name(name: &str) -> bool {
 #[serde(rename_all = "camelCase")]
 pub struct NameChangeInfo {
     pub allowed: bool,
-    /// When the name last changed (ms), if it ever did.
     pub changed_at: Option<i64>,
-    /// When the next change is allowed (ms), while it isn't yet.
     pub next_change_at: Option<i64>,
 }
 
-/// Whether the signed-in account may change its name right now.
 #[tauri::command]
 pub async fn name_change_info(state: State<'_, Arc<AppState>>) -> Result<NameChangeInfo> {
     let (_, token) = auth::access_token(&state).await?;
@@ -279,20 +259,15 @@ pub async fn name_change_info(state: State<'_, Arc<AppState>>) -> Result<NameCha
 #[derive(Debug, Serialize)]
 pub struct NameStatus {
     pub name: String,
-    /// "available", "taken", "not_allowed" (blocked by Mojang), "invalid" (not 3–16 letters,
-    /// numbers or underscores) or "unknown" (Mojang didn't answer for this one).
     pub status: &'static str,
 }
 
 #[derive(Debug, Serialize)]
 pub struct NameCheck {
     pub results: Vec<NameStatus>,
-    /// Mojang stopped answering for a moment (rate limit), so the rest weren't checked.
     pub limited: bool,
 }
 
-/// A name's status (see `NameStatus`), or `None` when Mojang is rate-limiting. A failed check is
-/// "unknown" instead of an error, so one hiccup doesn't throw away the names already checked.
 async fn name_status(http: &reqwest::Client, token: &str, name: &str) -> Option<&'static str> {
     if !valid_new_name(name) {
         return Some("invalid");
@@ -312,7 +287,6 @@ async fn name_status(http: &reqwest::Client, token: &str, name: &str) -> Option<
     })
 }
 
-/// Checks names in order, a few at a time, until `want` free ones turn up (or the list ends).
 #[tauri::command]
 pub async fn check_names(state: State<'_, Arc<AppState>>, names: Vec<String>, want: usize) -> Result<NameCheck> {
     let (_, token) = auth::access_token(&state).await?;
@@ -336,7 +310,6 @@ pub async fn check_names(state: State<'_, Arc<AppState>>, names: Vec<String>, wa
     Ok(NameCheck { results, limited })
 }
 
-/// Changes the signed-in account's name. Mojang then locks it for 30 days.
 #[tauri::command]
 pub async fn change_name(state: State<'_, Arc<AppState>>, name: String) -> Result<ProfileView> {
     let name = name.trim();
@@ -361,30 +334,22 @@ pub async fn change_name(state: State<'_, Arc<AppState>>, name: String) -> Resul
     Ok(profile_view(&state, profile).await)
 }
 
-// ------------------------------------------------------------------ find skins
-
-/// A skin found by player name or link, not yet in the library.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FoundSkin {
-    /// Player name, or a name taken from the link.
     pub name: String,
-    /// "player" or "link".
     pub source: String,
     pub data_url: String,
-    /// "classic" or "slim"; links can't tell, so they default to classic.
     pub model: String,
 }
 
 const SESSION_PROFILE: &str = "https://sessionserver.mojang.com/session/minecraft/profile";
-/// Skins are a few KB; anything bigger isn't one.
 const MAX_SKIN_BYTES: usize = 1024 * 1024;
 
 fn valid_player_name(name: &str) -> bool {
     (1..=16).contains(&name.len()) && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-/// Looks up any player's current skin by name through Mojang's public API.
 #[tauri::command]
 pub async fn find_player_skin(state: State<'_, Arc<AppState>>, name: String) -> Result<FoundSkin> {
     let name = name.trim();
@@ -444,15 +409,12 @@ pub async fn find_player_skin(state: State<'_, Arc<AppState>>, name: String) -> 
     })
 }
 
-/// Fetches a skin PNG from a link, such as a skin site's download link or a
-/// textures.minecraft.net address.
 #[tauri::command]
 pub async fn fetch_skin_link(state: State<'_, Arc<AppState>>, url: String) -> Result<FoundSkin> {
     let url = url.trim();
     let parsed = reqwest::Url::parse(url).map_err(|_| crate::error::Error::Msg("That isn't a valid link.".into()))?;
     let url = match (parsed.scheme(), parsed.host_str()) {
         ("https", Some(_)) => parsed.to_string(),
-        // Mojang's own texture links are published as http; the same file is served over https.
         ("http", Some("textures.minecraft.net")) => parsed.to_string().replacen("http://", "https://", 1),
         _ => bail!("Only secure (https) links are supported."),
     };
@@ -483,7 +445,6 @@ pub async fn fetch_skin_link(state: State<'_, Arc<AppState>>, url: String) -> Re
     Ok(FoundSkin { name, source: "link".into(), data_url: util::png_data_url(&bytes), model: "classic".into() })
 }
 
-/// Saves a found skin (a PNG data URL) into the library.
 #[tauri::command]
 pub fn save_found_skin(state: State<'_, Arc<AppState>>, name: String, model: String, data_url: String) -> Result<SavedSkinView> {
     let Some(b64) = data_url.strip_prefix("data:image/png;base64,") else {

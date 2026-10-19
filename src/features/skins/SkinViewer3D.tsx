@@ -2,10 +2,6 @@ import { useEffect, useRef } from "react";
 import * as skinview3d from "skinview3d";
 import type { AnimatedCape } from "./vitraCape";
 
-/**
- * "showcase" looks from behind and a little above, so the cape and the skin's side both show. It sits on the
- * side the turntable turns from, so a turning model shows its cape first.
- */
 export type ViewAngle = "front" | "back" | "left" | "right" | "showcase";
 export type AnimationKind = "idle" | "walk" | "run" | "wave" | "crouch" | "none";
 
@@ -28,10 +24,6 @@ function makeAnimation(kind: AnimationKind) {
   }
 }
 
-/**
- * Interactive 3D player model. Drag to rotate, scroll to zoom. Rendering is
- * paused whenever the window is hidden or the game is running.
- */
 export function SkinViewer3D({
   skin,
   model,
@@ -48,7 +40,6 @@ export function SkinViewer3D({
 }: {
   skin: string;
   model: "classic" | "slim";
-  /** A cape image, or a Vitra cape's frames, which play in a loop. */
   cape: string | AnimatedCape | null;
   elytra: boolean;
   animation: AnimationKind;
@@ -58,7 +49,6 @@ export function SkinViewer3D({
   zoom: number;
   nameTag?: string | null;
   rotateSpeed?: number;
-  /** Off: dragging still turns the model, but the wheel scrolls the page instead of zooming. */
   interactive?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -114,7 +104,6 @@ export function SkinViewer3D({
     if (typeof cape === "string") return void v.loadCape(cape, { backEquipment });
     v.loadCape(cape.frames[0], { backEquipment });
     if (cape.frames.length < 2) return;
-    // Animated: redraw the cape texture in place rather than making a new one per frame.
     let i = 0;
     const timer = setInterval(() => {
       i = (i + 1) % cape.frames.length;
@@ -157,7 +146,6 @@ export function SkinViewer3D({
     if (v) v.nameTag = nameTag ?? null;
   }, [nameTag]);
 
-  // Snap the camera to a preset angle (orbit around the model).
   useEffect(() => {
     const v = viewerRef.current;
     if (!v) return;
@@ -166,7 +154,6 @@ export function SkinViewer3D({
     const up = view === "showcase" ? 0.22 : 0;
     const flat = Math.sqrt(1 - up * up) * dist;
     v.camera.position.set(Math.sin(a) * flat, up * dist, Math.cos(a) * flat);
-    // The turntable spins the wrapper, so undo that too or the angle lands somewhere random.
     v.playerWrapper.rotation.y = 0;
     v.playerObject.rotation.y = 0;
     v.controls.update();
@@ -179,7 +166,6 @@ export function SkinViewer3D({
   );
 }
 
-/** An original placeholder skin, drawn in code (no Mojang assets bundled). */
 export function defaultSkin(accent = "#5b7cfa"): string {
   const c = document.createElement("canvas");
   c.width = 64;
@@ -194,12 +180,11 @@ export function defaultSkin(accent = "#5b7cfa"): string {
   const pants = "#2b3249";
   const shoes = "#17181f";
   const shirtDark = "#2e3d7a";
-  // Head (all faces)
   fill(skin, 0, 8, 32, 8);
-  fill(hair, 8, 0, 8, 8); // top
-  fill(skin, 16, 0, 8, 8); // bottom
-  fill(hair, 0, 8, 32, 2); // hairline all around
-  fill(hair, 24, 8, 8, 6); // back of head
+  fill(hair, 8, 0, 8, 8);
+  fill(skin, 16, 0, 8, 8);
+  fill(hair, 0, 8, 32, 2);
+  fill(hair, 24, 8, 8, 6);
   fill(hair, 0, 10, 2, 3);
   fill(hair, 22, 10, 2, 3);
   fill("#ffffff", 9, 12, 2, 1);
@@ -207,20 +192,16 @@ export function defaultSkin(accent = "#5b7cfa"): string {
   fill("#3b4a8a", 10, 12, 1, 1);
   fill("#3b4a8a", 13, 12, 1, 1);
   fill("#b07a5a", 11, 14, 2, 1);
-  // Body
   fill(accent, 16, 16, 24, 16);
   fill(shirtDark, 20, 16, 8, 4);
   fill(shirtDark, 20, 28, 8, 4);
   fill("#ffffff22", 23, 20, 2, 8);
-  // Right arm: sleeve + skin
   fill(skin, 40, 16, 16, 16);
   fill(accent, 40, 20, 16, 4);
   fill(accent, 44, 16, 4, 4);
-  // Left arm
   fill(skin, 32, 48, 16, 16);
   fill(accent, 32, 52, 16, 4);
   fill(accent, 36, 48, 4, 4);
-  // Legs
   fill(pants, 0, 16, 16, 16);
   fill(shoes, 0, 30, 16, 2);
   fill(shoes, 8, 16, 4, 4);

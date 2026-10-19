@@ -4,8 +4,6 @@ import { useEffect, useId, useMemo, useRef, useState, type InputHTMLAttributes, 
 import { cx } from "../../lib/format";
 import { Popover } from "./Overlay";
 
-// ------------------------------------------------------------------ Toggle
-
 export function Toggle({
   checked,
   onChange,
@@ -29,8 +27,6 @@ export function Toggle({
   );
 }
 
-// ------------------------------------------------------------------ Slider
-
 export function Slider({
   value,
   min,
@@ -48,7 +44,6 @@ export function Slider({
   max: number;
   step?: number;
   onChange: (v: number) => void;
-  /** Fires on release — use for expensive saves. */
   onCommit?: (v: number) => void;
   format?: (v: number) => string;
   disabled?: boolean;
@@ -76,8 +71,6 @@ export function Slider({
     </div>
   );
 }
-
-// ------------------------------------------------------------------ Segmented
 
 export function Segmented<T extends string>({
   value,
@@ -109,8 +102,6 @@ export function Segmented<T extends string>({
     </div>
   );
 }
-
-// ------------------------------------------------------------------ Inputs
 
 interface TextInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "onChange" | "size"> {
   value: string;
@@ -164,8 +155,6 @@ export function SearchInput({
     />
   );
 }
-
-// ------------------------------------------------------------------ Select
 
 export interface SelectOption<T extends string = string> {
   value: T;
@@ -313,8 +302,6 @@ export function Select<T extends string>({
     </>
   );
 }
-
-// ------------------------------------------------------------------ Field row
 
 export function Field({
   label,

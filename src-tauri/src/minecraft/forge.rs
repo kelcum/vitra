@@ -1,14 +1,3 @@
-//! Forge / NeoForge installation.
-//!
-//! Modern installers (Forge 1.13+, all NeoForge) ship an `install_profile.json`
-//! describing libraries plus a list of "processors" — small Java programs that
-//! deobfuscate and patch the vanilla client. We reproduce what the official
-//! installer does in client mode: download libraries, extract embedded files,
-//! run each client-side processor, and verify declared output hashes.
-//!
-//! Legacy installers (Forge ≤ 1.12) embed the version JSON and universal jar
-//! directly; those are extracted without processors.
-
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -33,7 +22,6 @@ struct InstallProfile {
     libraries: Vec<Library>,
     #[serde(default)]
     json: Option<String>,
-    // Legacy (≤1.12) layout
     #[serde(default)]
     install: Option<LegacyInstall>,
     #[serde(default, rename = "versionInfo")]
@@ -100,7 +88,6 @@ fn lib_path(libs: &Path, coord: &str) -> Result<PathBuf> {
     Ok(libs.join(rel))
 }
 
-/// Replaces `{KEY}` tokens; `[maven:coords]` resolves to a library path.
 fn resolve_arg(arg: &str, data: &HashMap<String, String>, libs: &Path) -> Result<String> {
     if arg.starts_with('[') && arg.ends_with(']') {
         return Ok(lib_path(libs, &arg[1..arg.len() - 1])?.to_string_lossy().to_string());
@@ -125,7 +112,6 @@ fn resolve_arg(arg: &str, data: &HashMap<String, String>, libs: &Path) -> Result
     Ok(out)
 }
 
-/// Downloads libraries, extracting ones that only exist inside the installer.
 async fn fetch_libraries(
     state: &AppState,
     task: &TaskHandle,
@@ -151,7 +137,6 @@ async fn fetch_libraries(
             if dest.exists() {
                 continue;
             }
-            // Absent entries are produced later by processors.
             if let Some(bytes) = read_zip_entry(&mut zip, &entry) {
                 util::write_atomic(&dest, &bytes)?;
             }
@@ -190,8 +175,6 @@ pub async fn install(
     task.stage(format!("Downloading {name} installer"), true);
     let installer = state.cache_dir().join("installers").join(format!("{loader}-{game}-{version}-installer.jar"));
     let url = installer_url(loader, game, version);
-    // The maven publishes a .sha1 next to each file. With it, a damaged copy in the cache is noticed
-    // and downloaded again; without it (offline), a cached installer is used as it is.
     let sha1 = net::get_bytes(&state.http, &format!("{url}.sha1"))
         .await
         .ok()
@@ -216,13 +199,11 @@ pub async fn install(
     let (profile, version_bytes) = match read {
         Ok(read) => read,
         Err(e) => {
-            // Don't keep a broken installer around: the next try downloads it again.
             let _ = std::fs::remove_file(&installer);
             bail!("The {name} installer was damaged ({e}). Try again to download a fresh copy.");
         }
     };
 
-    // Legacy installer: version JSON + universal jar are embedded directly.
     if let (Some(info), Some(legacy)) = (&profile.version_info, &profile.install) {
         task.stage(format!("Installing {name}"), true);
         let mut vj: VersionJson = serde_json::from_value(info.clone())?;
@@ -237,7 +218,6 @@ pub async fn install(
         })
         .await
         .map_err(|e| Error::Msg(e.to_string()))??;
-        // Legacy libraries lack download info; the universal jar is local.
         for lib in &mut vj.libraries {
             if lib.name == legacy.path {
                 lib.url = None;
@@ -266,7 +246,6 @@ pub async fn install(
     all_libs.extend(vj.libraries.iter().cloned());
     fetch_libraries(state, task, &installer, &all_libs).await?;
 
-    // Build the data map exactly like the official installer.
     let libs_dir = state.libraries_dir();
     let extract_dir = state.cache_dir().join("installers").join(format!("{loader}-{version}-data"));
     let mut data: HashMap<String, String> = HashMap::new();
@@ -307,7 +286,6 @@ pub async fn install(
     task.set_totals(processors.len() as u64, 0);
     for proc in processors {
         task.check_cancelled()?;
-        // Skip processors whose outputs already exist with the right hashes.
         let mut outputs = Vec::new();
         for (k, v) in &proc.outputs {
             let path = resolve_arg(k, &data, &libs_dir)?;

@@ -1,4 +1,3 @@
-/* Vitra site — liquid glass, matching the app. */
 :root {
   color-scheme: dark;
   --bg: #07060c;
@@ -33,8 +32,6 @@ a { color: inherit; }
 ::selection { background: rgb(var(--pink-rgb) / 0.35); }
 :focus-visible { outline: 2px solid var(--pink); outline-offset: 3px; border-radius: 10px; }
 
-/* ------------------------------------------------------------ backdrop
-   Large blurred color fields, like the app's liquid background. */
 .backdrop {
   position: fixed;
   inset: 0;
@@ -72,7 +69,6 @@ a { color: inherit; }
   to { transform: translate3d(6vw, 5vh, 0) scale(1.12); }
 }
 
-/* ------------------------------------------------------------ glass */
 .glass {
   position: relative;
   background:
@@ -86,7 +82,6 @@ a { color: inherit; }
     inset 0 1px 0 rgb(255 255 255 / 0.16),
     0 30px 60px -30px rgb(0 0 0 / 0.7);
 }
-/* Light-catching rim. */
 .glass::after {
   content: "";
   position: absolute;
@@ -100,7 +95,6 @@ a { color: inherit; }
   mask-composite: exclude;
 }
 
-/* ------------------------------------------------------------ layout */
 .wrap { width: min(1160px, 100% - 32px); margin-inline: auto; }
 section { padding: 120px 0 0; }
 .eyebrow {
@@ -125,7 +119,6 @@ h3 { font-size: 21px; font-weight: 720; letter-spacing: -0.025em; line-height: 1
   color: transparent;
 }
 
-/* ------------------------------------------------------------ nav */
 .nav {
   position: sticky;
   top: 14px;
@@ -160,7 +153,6 @@ h3 { font-size: 21px; font-weight: 720; letter-spacing: -0.025em; line-height: 1
 }
 .nav-links a:hover { color: var(--text); background: rgb(255 255 255 / 0.08); }
 
-/* ------------------------------------------------------------ buttons */
 .btn {
   position: relative;
   display: inline-flex;
@@ -203,7 +195,6 @@ h3 { font-size: 21px; font-weight: 720; letter-spacing: -0.025em; line-height: 1
 .btn-ghost:hover { background: rgb(255 255 255 / 0.12); }
 .nav .btn { height: 40px; padding: 0 18px; font-size: 14px; }
 
-/* ------------------------------------------------------------ hero */
 .hero { padding: 92px 0 0; text-align: center; }
 .pill {
   display: inline-flex;
@@ -272,7 +263,6 @@ h3 { font-size: 21px; font-weight: 720; letter-spacing: -0.025em; line-height: 1
 .loaders span { display: inline-flex; align-items: center; gap: 8px; }
 .loaders span::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--pink); opacity: 0.8; }
 
-/* ------------------------------------------------------------ stats */
 .stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -284,7 +274,6 @@ h3 { font-size: 21px; font-weight: 720; letter-spacing: -0.025em; line-height: 1
 .stat strong { display: block; font-size: 34px; font-weight: 800; letter-spacing: -0.045em; line-height: 1.1; }
 .stat span { display: block; margin-top: 6px; font-size: 14px; color: var(--muted); }
 
-/* ------------------------------------------------------------ bento */
 .bento {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -320,7 +309,6 @@ h3 { font-size: 21px; font-weight: 720; letter-spacing: -0.025em; line-height: 1
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
 }
 
-/* ------------------------------------------------------------ spotlight */
 .spotlight {
   display: grid;
   grid-template-columns: 0.9fr 1.5fr;
@@ -353,7 +341,6 @@ h3 { font-size: 21px; font-weight: 720; letter-spacing: -0.025em; line-height: 1
 .shot { padding: 8px; border-radius: 26px; }
 .shot img { border-radius: 19px; width: 100%; }
 
-/* ------------------------------------------------------------ tour */
 .tour-tabs {
   display: inline-flex;
   flex-wrap: wrap;
@@ -400,7 +387,6 @@ h3 { font-size: 21px; font-weight: 720; letter-spacing: -0.025em; line-height: 1
 .center { text-align: center; }
 .center .lead { margin-inline: auto; }
 
-/* ------------------------------------------------------------ sign-in */
 .signin-grid {
   display: grid;
   grid-template-columns: 1.25fr 1fr;
@@ -453,7 +439,6 @@ code {
 .never .links a { font-weight: 650; font-size: 14.5px; color: var(--pink); text-decoration: none; }
 .never .links a:hover { text-decoration: underline; }
 
-/* ------------------------------------------------------------ download */
 .cta-meta { margin: 16px 0 0; color: var(--faint); font-size: 13.5px; font-weight: 550; }
 .download {
   display: flex;
@@ -490,7 +475,6 @@ code {
 .download-note { margin: 18px 0 0; color: var(--faint); font-size: 13.5px; }
 .download-note b { color: var(--muted); font-weight: 650; }
 
-/* ------------------------------------------------------------ footer */
 footer { margin-top: 140px; padding: 34px 0 48px; border-top: 1px solid var(--line); color: var(--faint); font-size: 14px; }
 footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; }
 footer nav { display: flex; gap: 20px; margin-left: auto; }
@@ -498,7 +482,6 @@ footer a { color: var(--muted); text-decoration: none; }
 footer a:hover { color: var(--text); }
 .disclaimer { flex-basis: 100%; font-size: 12.5px; letter-spacing: 0.02em; }
 
-/* ------------------------------------------------------------ legal pages */
 .legal { width: min(760px, 100% - 32px); margin: 70px auto 0; }
 .legal h1 { font-size: clamp(40px, 7vw, 64px); font-weight: 820; letter-spacing: -0.05em; }
 .legal .updated { margin: 14px 0 0; color: var(--faint); font-size: 14px; }
@@ -511,13 +494,9 @@ footer a:hover { color: var(--text); }
 .legal strong { color: var(--text); }
 .legal a { color: var(--pink); }
 
-/* ------------------------------------------------------------ reveal */
-/* Only hidden when the script runs (it adds .js), so the page never ends
-   up blank without JavaScript. */
 .js .reveal { opacity: 0; transform: translateY(26px); transition: opacity 1s var(--ease), transform 1.1s var(--ease); }
 .js .reveal.in { opacity: 1; transform: none; }
 
-/* ------------------------------------------------------------ responsive */
 @media (max-width: 960px) {
   .nav-links { display: none; }
   .nav .btn { margin-left: auto; }

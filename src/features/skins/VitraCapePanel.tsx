@@ -13,7 +13,6 @@ type Choice = { kind: "none" } | { kind: "preset"; slug: string } | { kind: "cur
 const same = (a: Choice, b: Choice) =>
   a.kind === b.kind && (a.kind !== "preset" || (b.kind === "preset" && a.slug === b.slug));
 
-/** The visible outside of a cape (the 10×16 face at 1,1), animated when the cape is. */
 export function CapeThumb({ cape }: { cape: AnimatedCape | null }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -37,10 +36,6 @@ export function CapeThumb({ cape }: { cape: AnimatedCape | null }) {
   return <canvas ref={ref} className="vcape-thumb" width={30} height={48} />;
 }
 
-/**
- * Free Vitra capes: presets or your own picture / GIF. Everyone playing on Vitra sees them, next to
- * the Vitra badge on your name.
- */
 export function VitraCapePanel({ previewing, onPreview }: { previewing: boolean; onPreview: (cape: AnimatedCape | null) => void }) {
   const account = useActiveAccount();
   const instance = useSelectedInstance();
@@ -96,7 +91,6 @@ export function VitraCapePanel({ previewing, onPreview }: { previewing: boolean;
     onPreview(capeFor(c));
   };
 
-  // Show your Vitra cape on the model once it has loaded.
   useEffect(() => {
     if (status?.cape && art[status.cape.id] && !previewing && choice.kind !== "none") onPreview(capeFor(choice));
   }, [status?.cape?.id, art[status?.cape?.id ?? ""]]); // eslint-disable-line react-hooks/exhaustive-deps

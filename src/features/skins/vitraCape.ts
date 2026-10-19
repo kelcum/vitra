@@ -1,25 +1,18 @@
 import type { VitraCape } from "../../lib/types";
 
-/** A cape ready for the 3D preview: one canvas per frame, each a 2:1 cape texture. */
 export interface AnimatedCape {
   frames: HTMLCanvasElement[];
   delay: number;
 }
 
-/** An uploaded image turned into a Vitra cape: the preview plus what goes to the server. */
 export interface PreparedCape extends AnimatedCape {
-  png: string; // base64, frames stacked top to bottom
+  png: string;
 }
 
 const MAX_FRAMES = 48;
-/** The server's limits: capes up to 256 px wide, and at most 256×128×48 pixels across all frames. */
 const MAX_WIDTH = 256;
 const MAX_PIXELS = 256 * 128 * 48;
 
-/**
- * Which pixels of the elytra area (x 22–45, y 0–21 of a 64×32 cape texture) are wing. Everything else
- * has to stay transparent, or elytra render as solid slabs.
- */
 const ELYTRA_MASK = [
   ".........#########......",
   "..........##............",
@@ -55,7 +48,6 @@ function canvas(w: number, h: number): HTMLCanvasElement {
 
 const cache = new Map<string, Promise<AnimatedCape>>();
 
-/** Loads a cape from Vitra's cape server and splits it into frames. */
 export function loadVitraCape(cape: VitraCape): Promise<AnimatedCape> {
   let p = cache.get(cape.id);
   if (!p) {
@@ -79,7 +71,6 @@ export function loadVitraCape(cape: VitraCape): Promise<AnimatedCape> {
   return p;
 }
 
-/** Every frame of an image file; GIFs (and animated WebP/PNG) through the browser's image decoder. */
 async function decode(file: File): Promise<AnimatedCape> {
   const Decoder = (window as unknown as { ImageDecoder?: any }).ImageDecoder;
   if (Decoder && /gif|webp|png/i.test(file.type)) {
@@ -99,11 +90,9 @@ async function decode(file: File): Promise<AnimatedCape> {
         frames.push(c);
       }
       dec.close();
-      // When frames were skipped, each kept one stands in for `step` of them.
       const delay = (micros / frames.length / 1000) * step;
       return { frames, delay: Math.round(delay) || 100 };
     } catch {
-      /* fall back to the first frame */
     }
   }
   const bmp = await createImageBitmap(file);
@@ -112,7 +101,6 @@ async function decode(file: File): Promise<AnimatedCape> {
   return { frames: [c], delay: 100 };
 }
 
-/** Draws `src` into a rectangle, cropping to fill it (like CSS `object-fit: cover`). */
 function cover(g: CanvasRenderingContext2D, src: HTMLCanvasElement, x: number, y: number, w: number, h: number, flip = false) {
   const scale = Math.max(w / src.width, h / src.height);
   const sw = w / scale;
@@ -136,10 +124,6 @@ function darken(g: CanvasRenderingContext2D, x: number, y: number, w: number, h:
   g.restore();
 }
 
-/**
- * Turns a picture into a cape texture at `s` times the vanilla 64×32: the picture covers the
- * outside, a darker mirror of it the inside, its edges wrap the sides, and it doubles as elytra.
- */
 function pictureToCape(art: HTMLCanvasElement, s: number): HTMLCanvasElement {
   const out = canvas(64 * s, 32 * s);
   const g = out.getContext("2d")!;
@@ -150,7 +134,6 @@ function pictureToCape(art: HTMLCanvasElement, s: number): HTMLCanvasElement {
   cover(g, art, ...r(1, 1, 10, 16));
   cover(g, art, ...r(12, 1, 10, 16), true);
   darken(g, ...r(12, 1, 10, 16), 0.45);
-  // Sides, top and bottom: stretch the picture's outermost strips.
   const strip = (sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number, dark: number) => {
     g.drawImage(art, sx, sy, Math.max(1, sw), Math.max(1, sh), ...r(dx, dy, dw, dh));
     darken(g, ...r(dx, dy, dw, dh), dark);
@@ -159,14 +142,12 @@ function pictureToCape(art: HTMLCanvasElement, s: number): HTMLCanvasElement {
   strip(art.width * 0.94, 0, art.width * 0.06, art.height, 11, 1, 1, 16, 0.3);
   strip(0, 0, art.width, art.height * 0.04, 1, 0, 10, 1, 0.15);
   strip(0, art.height * 0.96, art.width, art.height * 0.04, 11, 0, 10, 1, 0.4);
-  // Elytra: the picture covers the wing's outer face (x 34–45) and the rest is cut to the wing shape.
   const wing = canvas(24 * s, 22 * s);
   const wg = wing.getContext("2d")!;
   wg.imageSmoothingEnabled = !pixelArt;
   wg.imageSmoothingQuality = "high";
   cover(wg, art, 12 * s, 0, 12 * s, 22 * s);
-  wg.drawImage(wing, 12 * s, 0, 1, 22 * s, 0, 0, 12 * s, 22 * s); // stretch the wing's edge over the side strip
-  // Cut to the wing shape in one step: each fill in "destination-in" mode would erase the others.
+  wg.drawImage(wing, 12 * s, 0, 1, 22 * s, 0, 0, 12 * s, 22 * s);
   const mask = canvas(24 * s, 22 * s);
   const mg = mask.getContext("2d")!;
   ELYTRA_MASK.forEach((row, y) => [...row].forEach((c, x) => c === "#" && mg.fillRect(x * s, y * s, s, s)));
@@ -176,7 +157,6 @@ function pictureToCape(art: HTMLCanvasElement, s: number): HTMLCanvasElement {
   return out;
 }
 
-/** OptiFine-style 46×22 (92×44, …) capes sit on a 64×32 (128×64, …) canvas. */
 function padTexture(src: HTMLCanvasElement): HTMLCanvasElement {
   let w = 64;
   while (w < src.width) w *= 2;
@@ -208,11 +188,6 @@ async function encode(frames: HTMLCanvasElement[]): Promise<string> {
   return btoa(bin);
 }
 
-/**
- * Makes a Vitra cape from any image or GIF. Cape textures (64×32, OptiFine's 46×22, or frames
- * stacked top to bottom) are used as they are; anything else becomes the picture on the cape.
- * Shrinks the result until it fits the server's size limit.
- */
 export async function prepareCape(file: File): Promise<PreparedCape> {
   if (file.size > 25_000_000) throw new Error("That file is over 25 MB. Pick a smaller image or GIF.");
   const decoded = await decode(file);
@@ -242,7 +217,6 @@ export async function prepareCape(file: File): Promise<PreparedCape> {
 
   let frames = textures(4);
   let frameDelay = delay;
-  // Too many frames for the pixel budget: keep every other one, each shown twice as long.
   while (frames.length > 1 && frames.length * frames[0].width * frames[0].height > MAX_PIXELS) {
     frames = frames.filter((_, i) => i % 2 === 0);
     frameDelay = Math.min(5000, frameDelay * 2);
@@ -253,7 +227,7 @@ export async function prepareCape(file: File): Promise<PreparedCape> {
     if (attempt === 0) frames = textures(3);
     else if (attempt === 1) frames = textures(2);
     else if (frames.length > 1) {
-      frames = frames.filter((_, i) => i % 2 === 0); // half the frames, each shown twice as long
+      frames = frames.filter((_, i) => i % 2 === 0);
       frameDelay = Math.min(5000, frameDelay * 2);
     } else break;
   }

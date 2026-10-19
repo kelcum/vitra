@@ -1,20 +1,14 @@
-// Typed wrappers for every backend command. Components never call `invoke`
-// directly, so the IPC surface is visible in one place.
-
 import { invoke } from "@tauri-apps/api/core";
 import type * as T from "./types";
 
 export const api = {
-  // settings
   getSettings: () => invoke<T.Settings>("get_settings"),
   saveSettings: (settings: T.Settings) => invoke<T.Settings>("save_settings", { settings }),
   resetSettings: () => invoke<T.Settings>("reset_settings"),
 
-  // tasks
   listTasks: () => invoke<T.TaskSnapshot[]>("list_tasks"),
   cancelTask: (id: string) => invoke<void>("cancel_task", { id }),
 
-  // instances
   listInstances: () => invoke<T.InstanceView[]>("list_instances"),
   getInstance: (id: string) => invoke<T.InstanceView>("get_instance", { id }),
   createInstance: (req: { name: string; gameVersion: string; loader: T.Loader; loaderVersion: string | null; icon?: string }) =>
@@ -30,7 +24,6 @@ export const api = {
   findExternalInstances: (folder: string | null) => invoke<T.ExternalInstance[]>("find_external_instances", { folder }),
   importExternalInstance: (path: string) => invoke<T.InstanceView>("import_external_instance", { path }),
 
-  // versions / install / launch
   listGameVersions: () => invoke<T.GameVersion[]>("list_game_versions"),
   latestRelease: () => invoke<string>("latest_release"),
   installInstance: (id: string, verify: boolean) => invoke<string>("install_instance_cmd", { id, verify }),
@@ -40,21 +33,17 @@ export const api = {
   launch: (id: string, options?: { world?: string | null; server?: string | null; demo?: boolean }) => invoke<void>("launch_instance", { id, options }),
   stop: (id: string) => invoke<void>("stop_instance", { id }),
   runningInstances: () => invoke<T.RunningInfo[]>("running_instances"),
-  /** Development builds only: a line in a running game's log, as if the game printed it. */
   injectGameLog: (id: string, text: string) => invoke<void>("inject_game_log", { id, text }),
 
-  // memories
   listMemories: () => invoke<T.Memory[]>("list_memories"),
   setMemoryFavorite: (id: string, favorite: boolean) => invoke<T.Memory>("set_memory_favorite", { id, favorite }),
   deleteMemory: (id: string) => invoke<void>("delete_memory", { id }),
   revealMemory: (id: string) => invoke<void>("reveal_memory", { id }),
 
-  // java
   listJava: () => invoke<T.JavaInstall[]>("list_java"),
   inspectJava: (path: string) => invoke<T.JavaInstall>("inspect_java", { path }),
   installJavaRuntime: (component: string, major: number) => invoke<string>("install_java_runtime", { component, major }),
 
-  // accounts
   listAccounts: () => invoke<T.Account[]>("list_accounts"),
   setActiveAccount: (uuid: string) => invoke<void>("set_active_account", { uuid }),
   removeAccount: (uuid: string) => invoke<void>("remove_account", { uuid }),
@@ -62,7 +51,6 @@ export const api = {
   cancelSignIn: () => invoke<void>("cancel_sign_in"),
   checkActiveAccount: () => invoke<T.Account | null>("check_active_account"),
 
-  // skins
   listSkins: () => invoke<T.SavedSkin[]>("list_skins"),
   importSkin: (path: string, name: string, model: string) => invoke<T.SavedSkin>("import_skin", { path, name, model }),
   updateSkin: (id: string, name: string, model: string) => invoke<void>("update_skin", { id, name, model }),
@@ -82,11 +70,9 @@ export const api = {
   cosmeticsSupported: (loader: string, gameVersion: string) => invoke<boolean>("cosmetics_supported", { loader, gameVersion }),
   deleteVitraData: () => invoke<void>("delete_vitra_data"),
   cosmeticsStatus: () => invoke<T.CosmeticsStatus>("cosmetics_status"),
-  /** A preset, an uploaded cape (base64 PNG of stacked frames), or neither to take the cape off. */
   setVitraCape: (args: { preset?: string; image?: string; frames?: number; delay?: number }) =>
     invoke<T.VitraCape | null>("set_vitra_cape", { preset: null, image: null, frames: null, delay: null, ...args }),
 
-  // modrinth & content
   search: (params: {
     query: string;
     projectType: T.ProjectType;
@@ -113,7 +99,6 @@ export const api = {
   importContentFiles: (id: string, projectType: T.ProjectType, paths: string[]) =>
     invoke<number>("import_content_files", { id, projectType, paths }),
 
-  // packs & options
   getGameOptions: (id: string) => invoke<Record<string, string>>("get_game_options", { id }),
   setGameOptions: (id: string, values: Record<string, string>) => invoke<void>("set_game_options", { id, values }),
   listResourcePacks: (id: string) => invoke<T.ResourcePack[]>("list_resource_packs", { id }),
@@ -121,7 +106,6 @@ export const api = {
   shaderState: (id: string) => invoke<T.ShaderState>("shader_state", { id }),
   setActiveShader: (id: string, pack: string | null) => invoke<void>("set_active_shader", { id, pack }),
 
-  // servers
   listServers: () => invoke<T.ServerEntry[]>("list_servers"),
   addServer: (name: string, address: string) => invoke<T.ServerEntry>("add_server", { name, address }),
   editServer: (id: string, name: string, address: string) => invoke<void>("edit_server", { id, name, address }),
@@ -129,7 +113,6 @@ export const api = {
   setServerHidden: (id: string, hidden: boolean) => invoke<void>("set_server_hidden", { id, hidden }),
   pingServer: (address: string) => invoke<T.ServerStatus>("ping_server", { address }),
 
-  // modpacks
   importModpackFile: (path: string) => invoke<T.InstanceView>("import_modpack_file", { path }),
   installModpack: (projectId: string, versionId: string | null, title: string, iconUrl: string | null) =>
     invoke<T.InstanceView>("install_modpack", { projectId, versionId, title, iconUrl }),
@@ -138,7 +121,6 @@ export const api = {
     options: { name: string; version: string; summary?: string; include: string[]; outPath: string },
   ) => invoke<string>("export_modpack", { id, options }),
 
-  // system
   systemInfo: () => invoke<T.SystemInfo>("system_info"),
   patchNotes: (limit: number) => invoke<T.PatchNote[]>("patch_notes", { limit }),
   patchNoteBody: (contentPath: string) => invoke<T.TextBlock[]>("patch_note_body", { contentPath }),
@@ -154,7 +136,6 @@ export const api = {
   clearCache: () => invoke<void>("clear_cache"),
 };
 
-/** Backend errors arrive as strings; some carry a machine-readable prefix. */
 export function parseError(e: unknown): { code: string | null; message: string } {
   const raw = typeof e === "string" ? e : e instanceof Error ? e.message : String(e);
   const m = raw.match(/^([A-Z_]{4,}):\s*([\s\S]*)$/);

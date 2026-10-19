@@ -24,13 +24,10 @@ export function SettingsTab({ instance }: { instance: InstanceView }) {
   const [sys, setSys] = useState<SystemInfo | null>(null);
   const [javas, setJavas] = useState<JavaInstall[]>([]);
   const timer = useRef<number>(undefined);
-  // Only what was edited here is saved, on top of the instance as it is now: the version section and
-  // the launcher (say, the loader version picked at first launch) change it too.
   const pending = useRef<Partial<Instance> | null>(null);
   const latest = useRef(instance);
   latest.current = instance;
 
-  // Follow outside changes, unless an edit is still waiting to be saved.
   useEffect(() => {
     if (!pending.current) setDraft(strip(instance));
   }, [instance]);
@@ -39,7 +36,6 @@ export function SettingsTab({ instance }: { instance: InstanceView }) {
     api.listJava().then(setJavas).catch(() => {});
   }, []);
 
-  /** Auto-saves (debounced) everything except version changes. */
   const save = (patch: Partial<Instance>) => {
     setDraft((d) => ({ ...d, ...patch }));
     pending.current = { ...pending.current, ...patch };
@@ -199,7 +195,6 @@ export function SettingsTab({ instance }: { instance: InstanceView }) {
   );
 }
 
-/** A pixel size you can type freely; it's checked against `min` when you leave the box. */
 function SizeInput({ value, min, onChange }: { value: number; min: number; onChange: (v: number) => void }) {
   const [text, setText] = useState(String(value));
   const [editing, setEditing] = useState(false);

@@ -1,9 +1,3 @@
-//! Resource packs, shader packs and the game's `options.txt`.
-//!
-//! Resource pack order and enabled state live in `options.txt`
-//! (`resourcePacks:[...]`, lowest priority first). Shader selection lives in
-//! Iris' `config/iris.properties`.
-
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -18,9 +12,6 @@ use crate::instances::{self, Instance};
 use crate::state::AppState;
 use crate::util;
 
-// ---------------------------------------------------------------- options.txt
-
-/// Ordered `key:value` lines; unknown lines are preserved verbatim.
 pub struct Options {
     lines: Vec<(String, String)>,
 }
@@ -77,9 +68,6 @@ pub fn get_game_options(state: State<'_, Arc<AppState>>, id: String) -> Result<H
     Ok(opts.lines.into_iter().collect())
 }
 
-/// Merges values into options.txt, matching the existing value style
-/// (`true/false` vs `0/1`) when a key already exists so older versions keep
-/// understanding the file.
 #[tauri::command]
 pub fn set_game_options(state: State<'_, Arc<AppState>>, id: String, values: HashMap<String, String>) -> Result<()> {
     if state.running.lock().unwrap().contains_key(&id) {
@@ -102,8 +90,6 @@ pub fn set_game_options(state: State<'_, Arc<AppState>>, id: String, values: Has
     opts.save(&path)
 }
 
-// ---------------------------------------------------------------- resource packs
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourcePack {
@@ -113,7 +99,6 @@ pub struct ResourcePack {
     pub pack_format: Option<i64>,
     pub icon: Option<String>,
     pub enabled: bool,
-    /// Position in the enabled list, 0 = highest priority (top).
     pub order: Option<usize>,
     pub compatible: Option<bool>,
     pub size: u64,
@@ -134,14 +119,12 @@ fn read_pack(path: &Path) -> (Option<serde_json::Value>, Option<Vec<u8>>) {
         Some(buf)
     };
     let meta = read("pack.mcmeta").and_then(|b| {
-        // Some packs have a UTF-8 BOM.
         let b = b.strip_prefix(&[0xEF, 0xBB, 0xBF]).map(|s| s.to_vec()).unwrap_or(b);
         serde_json::from_slice(&b).ok()
     });
     (meta, read("pack.png"))
 }
 
-/// Text from a pack description, which may be a string or a chat component.
 fn description_text(v: &serde_json::Value) -> String {
     match v {
         serde_json::Value::String(s) => strip_formatting(s),
@@ -174,8 +157,6 @@ fn strip_formatting(s: &str) -> String {
     out
 }
 
-/// The resource pack format this Minecraft version expects, read from the
-/// installed client jar's `version.json`.
 fn expected_pack_format(state: &AppState, inst: &Instance) -> Option<i64> {
     let jar = state.versions_dir().join(&inst.game_version).join(format!("{}.jar", inst.game_version));
     let file = std::fs::File::open(jar).ok()?;
@@ -191,7 +172,6 @@ fn expected_pack_format(state: &AppState, inst: &Instance) -> Option<i64> {
         .or_else(|| pv.as_i64())
 }
 
-/// Whether a pack (its `pack.mcmeta`) suits the expected format; `None` when either is unknown.
 fn pack_compatible(expected: Option<i64>, meta: Option<&serde_json::Value>) -> Option<bool> {
     let pack = meta.and_then(|m| m.get("pack"));
     let format = pack.and_then(|p| p.get("pack_format")).and_then(|f| f.as_i64());
@@ -210,7 +190,6 @@ pub fn list_resource_packs(state: State<'_, Arc<AppState>>, id: String) -> Resul
     let inst = instances::load(&state, &id)?;
     let game_dir = instances::game_dir(&state, &inst);
     let opts = Options::load(&game_dir.join("options.txt"));
-    // options.txt lists lowest priority first; the UI shows highest first.
     let enabled: Vec<String> = opts.list("resourcePacks").into_iter().rev().collect();
     let expected = expected_pack_format(&state, &inst);
     let mut packs = Vec::new();
@@ -254,7 +233,6 @@ pub fn list_resource_packs(state: State<'_, Arc<AppState>>, id: String) -> Resul
     Ok(packs)
 }
 
-/// `enabled` is the list of pack file names, highest priority first.
 #[tauri::command]
 pub fn set_resource_packs(state: State<'_, Arc<AppState>>, id: String, enabled: Vec<String>) -> Result<()> {
     if state.running.lock().unwrap().contains_key(&id) {
@@ -263,7 +241,6 @@ pub fn set_resource_packs(state: State<'_, Arc<AppState>>, id: String, enabled: 
     let inst = instances::load(&state, &id)?;
     let path = options_path(&state, &inst);
     let mut opts = Options::load(&path);
-    // Keep built-in entries ("vanilla", mod-provided packs) at the bottom.
     let mut list: Vec<String> = opts.list("resourcePacks").into_iter().filter(|p| !p.starts_with("file/")).collect();
     if list.is_empty() {
         list.push("vanilla".into());
@@ -274,8 +251,6 @@ pub fn set_resource_packs(state: State<'_, Arc<AppState>>, id: String, enabled: 
         }
         list.push(format!("file/{name}"));
     }
-    // Packs the user explicitly enabled are acknowledged even if their format
-    // differs, so the game doesn't silently drop them.
     let mut incompatible: Vec<String> = opts.list("incompatibleResourcePacks");
     incompatible.retain(|p| list.contains(p));
     let expected = expected_pack_format(&state, &inst);
@@ -291,15 +266,12 @@ pub fn set_resource_packs(state: State<'_, Arc<AppState>>, id: String, enabled: 
     opts.save(&path)
 }
 
-// ---------------------------------------------------------------- shaders
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShaderState {
     pub packs: Vec<ShaderPack>,
     pub active: Option<String>,
     pub enabled: bool,
-    /// "iris", "oculus", "optifine" or "none".
     pub support: String,
 }
 
@@ -379,7 +351,6 @@ pub fn shader_state(state: State<'_, Arc<AppState>>, id: String) -> Result<Shade
     })
 }
 
-/// Activates a shader pack in Iris (or turns shaders off with `None`).
 #[tauri::command]
 pub fn set_active_shader(state: State<'_, Arc<AppState>>, id: String, pack: Option<String>) -> Result<()> {
     let inst = instances::load(&state, &id)?;

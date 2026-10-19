@@ -42,7 +42,6 @@ import { CapeThumb } from "../skins/VitraCapePanel";
 import { loadVitraCape, type AnimatedCape } from "../skins/vitraCape";
 import "./home.css";
 
-// The 3D model pulls in the 3D engine, so it loads after the rest of Home.
 const HeroPlayer = lazy(() => import("./HeroPlayer"));
 
 const stagger = {
@@ -91,8 +90,6 @@ export function Home() {
     </motion.div>
   );
 }
-
-// ------------------------------------------------------------------ hero
 
 function HeroSkeleton() {
   return (
@@ -216,8 +213,6 @@ function Hero({ instance, vitraCape }: { instance: InstanceView; vitraCape: Vitr
   );
 }
 
-// ------------------------------------------------------------------ welcome
-
 function Welcome() {
   const setDialogs = useDialogs((s) => s.set);
   const navigate = useNav((s) => s.navigate);
@@ -230,7 +225,6 @@ function Welcome() {
       const latest = await api.latestRelease();
       let gameVersion = latest;
       if (kind === "fabric") {
-        // Use the newest release Fabric already supports.
         const supported = new Set(await api.listLoaderGameVersions("fabric"));
         const versions = await api.listGameVersions();
         gameVersion = versions.find((v) => v.kind === "release" && supported.has(v.id))?.id ?? latest;
@@ -304,8 +298,6 @@ function Welcome() {
   );
 }
 
-// ------------------------------------------------------------------ cards
-
 function RecentWorlds() {
   const [worlds, setWorlds] = useState<WorldInfo[] | null>(null);
   const instances = useInstances((s) => s.instances);
@@ -357,10 +349,8 @@ function RecentWorlds() {
   );
 }
 
-// Vitra's numbers change slowly; one request a minute is plenty, however often Home opens.
 const STATUS_TTL_MS = 60 * 1000;
 
-/** Your Vitra cape plus how many people play on Vitra. undefined while loading. */
 function useVitraStatus(): CosmeticsStatus | "error" | undefined {
   const account = useActiveAccount();
   const key = account?.uuid ?? "";
@@ -393,7 +383,6 @@ function VitraCard({ status }: { status: CosmeticsStatus | "error" | undefined }
 
   useEffect(() => {
     setArt(null);
-    // No cape yet: show off a free one instead.
     const show = cape ?? data?.presets[0]?.cape;
     if (!show) return;
     let live = true;
@@ -472,8 +461,6 @@ function QuickAccess() {
     </>
   );
 }
-
-// ------------------------------------------------------------------ news
 
 function News() {
   const [notes, setNotes] = useState<PatchNote[] | null>(null);

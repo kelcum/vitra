@@ -1,22 +1,3 @@
-//! Memories: Vitra keeps a picture of the big first-time moments of a playthrough (the first
-//! diamonds, the first trip to the Nether, beating the Ender Dragon…) and shows them as a timeline.
-//!
-//! It needs no mod, so it works with every Minecraft version and loader since advancements exist
-//! (1.12). When the player earns an advancement the game writes the chat announcement to its log,
-//! "k3 has made the advancement [Diamonds!]", in the player's language. Vitra reads the
-//! announcement formats and advancement titles from the game's own translations, so it recognises
-//! them in any language, then takes a picture of the game window (see `capture`) a moment later,
-//! with the advancement toast on screen. Nothing runs inside the game.
-//!
-//! Only meaningful moments are kept: a hand-picked list of milestones, every challenge, and
-//! optionally every other advancement. Memories live in the game data folder as `<id>.json` with
-//! `<id>.jpg` and a small `<id>.thumb.jpg`.
-//!
-//! Fabric 26.3 instances run Vitra's own mod, which reports more through "Vitra moment: {json}"
-//! lines (see the mod's `Moments`): every finished advancement with its id (also on servers that
-//! don't announce them), the first visit ever to a biome, rare mobs in sight, and where the player
-//! stood for each. With the mod there, those lines replace the chat announcements.
-
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -35,10 +16,7 @@ use crate::presence::{place_from_log, Place};
 use crate::state::AppState;
 use crate::util;
 
-/// Wait this long after the announcement before taking the picture, so the advancement toast has
-/// slid in.
 const CAPTURE_DELAY: Duration = Duration::from_millis(900);
-/// Longest side of the saved picture and of its thumbnail.
 const FULL_SIDE: u32 = 2560;
 const THUMB_SIDE: u32 = 640;
 
@@ -49,7 +27,6 @@ enum Frame {
     Challenge,
 }
 
-/// Milestones that are always kept: (advancement id, category, title, description).
 const MOMENTS: &[(&str, &str, &str, &str)] = &[
     ("story.mine_diamond", "treasure", "First diamonds", "You found your first diamonds."),
     ("story.shiny_gear", "treasure", "Diamond armor", "You suited up in diamond armor for the first time."),
@@ -77,7 +54,6 @@ const MOMENTS: &[(&str, &str, &str, &str)] = &[
     ("adventure.minecraft_trials_edition", "adventure", "Trial chambers", "You stepped into the trial chambers."),
 ];
 
-/// Biomes whose first visit is kept (from the mod): (biome id without "minecraft:", title, description).
 const BIOMES: &[(&str, &str, &str)] = &[
     ("mushroom_fields", "Mushroom island", "You set foot on a mushroom island."),
     ("cherry_grove", "Cherry grove", "You walked into a cherry grove."),
@@ -98,7 +74,6 @@ const BIOMES: &[(&str, &str, &str)] = &[
     ("basalt_deltas", "Basalt deltas", "You found the basalt deltas."),
 ];
 
-/// Rare mobs whose first sighting is kept (from the mod): (kind, title, description).
 const MOBS: &[(&str, &str, &str)] = &[
     ("minecraft:warden", "The Warden", "You came face to face with the Warden."),
     ("minecraft:elder_guardian", "An elder guardian", "You spotted an elder guardian."),
@@ -116,14 +91,11 @@ const MOBS: &[(&str, &str, &str)] = &[
     ("minecraft:mooshroom/brown", "A brown mooshroom", "You found a brown mooshroom."),
 ];
 
-/// Where the player stood (from the mod).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Spot {
-    /// "minecraft:overworld", "minecraft:the_nether", "minecraft:the_end" or a modded dimension.
     pub dimension: String,
     pub biome: Option<String>,
-    /// The biome's name in the game's language.
     pub biome_name: Option<String>,
     pub x: i64,
     pub y: i64,
@@ -134,45 +106,32 @@ pub struct Spot {
 #[serde(rename_all = "camelCase")]
 pub struct Memory {
     pub id: String,
-    /// When it happened (ms since the epoch).
     pub at: i64,
     pub instance_id: String,
     pub instance_name: String,
     pub game_version: String,
     pub loader: String,
-    /// The singleplayer world's folder name.
     pub world: Option<String>,
-    /// The server's name from the server list, else its address.
     pub server: Option<String>,
-    /// "treasure", "nether", "end", "boss", "milestone", "adventure", "challenge", "advancement",
-    /// "biome" or "mob".
     pub category: String,
     pub title: String,
     pub description: String,
-    /// What the game calls it, in the game's language: the advancement ("Diamonds!"), biome or mob;
-    /// and its id when known ("story.mine_diamond", "minecraft:cherry_grove", "minecraft:warden").
     pub advancement: String,
     pub advancement_id: Option<String>,
-    /// Where it happened, in Fabric 26.3 instances.
     #[serde(default)]
     pub spot: Option<Spot>,
     pub favorite: bool,
-    /// Filled in when listing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumb: Option<String>,
 }
 
-// ---------------------------------------------------------------- the game's translations
-
-/// "%s has made the advancement %s" split around its two arguments.
 #[derive(Debug, Clone)]
 struct Template {
     before: String,
     between: String,
     after: String,
-    /// The advancement comes first in a few languages ("%2$s … %1$s").
     title_first: bool,
 }
 
@@ -194,7 +153,6 @@ impl Template {
                 parts.push(String::new());
                 rest = t;
             } else {
-                // "%1$s"
                 let digits: String = tail.chars().take_while(char::is_ascii_digit).collect();
                 let t = tail[digits.len()..].strip_prefix("$s")?;
                 args.push(digits.parse::<u32>().ok()?);
@@ -214,7 +172,6 @@ impl Template {
         })
     }
 
-    /// The player and the advancement title (without its brackets) when `text` is this announcement.
     fn read<'a>(&self, text: &'a str) -> Option<(&'a str, &'a str)> {
         let rest = text.strip_prefix(self.before.as_str())?.strip_suffix(self.after.as_str())?;
         for (i, _) in rest.match_indices(self.between.as_str()) {
@@ -231,13 +188,10 @@ impl Template {
     }
 }
 
-/// What a game's announcements look like, and the advancements it knows by title.
 #[derive(Debug, Default)]
 struct Patterns {
     templates: Vec<(Template, Frame)>,
-    /// Shown title → advancement id ("Diamonds!" → "story.mine_diamond").
     ids: HashMap<String, String>,
-    /// Advancement id → description, in the game's language.
     descriptions: HashMap<String, String>,
 }
 
@@ -262,7 +216,6 @@ impl Patterns {
         }
     }
 
-    /// Minecraft's English announcements, for when the game's own files can't be read.
     fn english() -> Self {
         let lang: HashMap<String, String> = [
             ("chat.type.advancement.task", "%s has made the advancement %s"),
@@ -277,7 +230,6 @@ impl Patterns {
         p
     }
 
-    /// The announcement in a chat line: (player, shown title, frame).
     fn read<'a>(&self, text: &'a str) -> Option<(&'a str, &'a str, Frame)> {
         self.templates.iter().find_map(|(t, frame)| t.read(text).map(|(p, a)| (p, a, *frame)))
     }
@@ -287,7 +239,6 @@ fn parse_lang(bytes: &[u8], json: bool) -> HashMap<String, String> {
     if json {
         return serde_json::from_slice(bytes).unwrap_or_default();
     }
-    // 1.12: "key=value" lines.
     String::from_utf8_lossy(bytes)
         .lines()
         .filter(|l| !l.starts_with('#'))
@@ -295,7 +246,6 @@ fn parse_lang(bytes: &[u8], json: bool) -> HashMap<String, String> {
         .collect()
 }
 
-/// English comes with the game jar, other languages from the asset index.
 fn read_lang(client_jar: &Path, assets: &Path, index_id: &str, code: &str) -> Option<HashMap<String, String>> {
     if code == "en_us" {
         let mut zip = zip::ZipArchive::new(std::fs::File::open(client_jar).ok()?).ok()?;
@@ -317,7 +267,6 @@ fn read_lang(client_jar: &Path, assets: &Path, index_id: &str, code: &str) -> Op
     None
 }
 
-/// The language picked in the game's options ("lang:de_de").
 fn game_language(game_dir: &Path) -> String {
     std::fs::read_to_string(game_dir.join("options.txt"))
         .ok()
@@ -344,10 +293,6 @@ fn load_patterns(client_jar: &Path, assets: &Path, index_id: &str, game_dir: &Pa
     p
 }
 
-// ---------------------------------------------------------------- which moments count
-
-/// Whether the announced player is this player. Servers may put a rank or team in front of the
-/// name ("[VIP] k3").
 fn is_player(shown: &str, name: &str) -> bool {
     match shown.strip_suffix(name) {
         Some(before) => before.is_empty() || !before.ends_with(|c: char| c.is_alphanumeric() || c == '_'),
@@ -355,7 +300,6 @@ fn is_player(shown: &str, name: &str) -> bool {
     }
 }
 
-/// (category, title, description) of a memory for this advancement, or `None` when it isn't one.
 fn moment(id: Option<&str>, frame: Frame, shown: &str, description: Option<&str>, every: bool) -> Option<(String, String, String)> {
     if let Some((_, category, title, text)) = id.and_then(|id| MOMENTS.iter().find(|m| m.0 == id)) {
         return Some((category.to_string(), title.to_string(), text.to_string()));
@@ -368,9 +312,6 @@ fn moment(id: Option<&str>, frame: Frame, shown: &str, description: Option<&str>
     }
 }
 
-// ---------------------------------------------------------------- watching a game
-
-/// What a running game is, for the memories it makes.
 pub struct GameInfo {
     pub instance: Instance,
     pub game_dir: PathBuf,
@@ -381,19 +322,15 @@ pub struct GameInfo {
     pub started_at: i64,
 }
 
-/// Follows one game's log and saves its memories.
 pub struct Watcher {
     state: Arc<AppState>,
     game: Arc<GameInfo>,
     patterns: Arc<OnceLock<Patterns>>,
     place: Place,
-    /// Advancements (by id, else shown title) already kept this session.
     seen: HashSet<String>,
-    /// Vitra's mod is reporting moments, so chat announcements are left to it.
     mod_reports: bool,
 }
 
-/// A moment about to become a memory.
 struct Found {
     category: String,
     title: String,
@@ -408,14 +345,12 @@ impl Watcher {
         let game = Arc::new(game);
         let patterns = Arc::new(OnceLock::new());
         let (g, p, assets) = (game.clone(), patterns.clone(), state.assets_dir());
-        // Reading the translations takes a moment; the log keeps flowing meanwhile.
         tauri::async_runtime::spawn_blocking(move || {
             let _ = p.set(load_patterns(&g.client_jar, &assets, &g.asset_index, &g.game_dir));
         });
         Self { state, game, patterns, place: Place::Menu, seen: HashSet::new(), mod_reports: false }
     }
 
-    /// One line of the game's log.
     pub fn line(&mut self, text: &str) {
         if let Some((_, json)) = text.split_once("Vitra moment: ") {
             if let Ok(report) = serde_json::from_str::<serde_json::Value>(json.trim()) {
@@ -458,14 +393,11 @@ impl Watcher {
         self.keep(Found { category, title, description, advancement: shown, advancement_id: id, spot });
     }
 
-    /// A "Vitra moment" line from the mod.
     fn reported(&mut self, r: &serde_json::Value) {
         let settings = self.state.settings();
         match read_report(r, settings.memories_every_advancement) {
             Some(Report::Advancement { id, frame, shown, description, spot }) => self.advancement(Some(id), frame, shown, description, spot),
             Some(Report::Biome(found)) if settings.memories => self.keep(found),
-            // The mod reports each kind once per session; whether it's the first time in this world
-            // is kept here.
             Some(Report::Mob(found)) if settings.memories => {
                 if let Some(kind) = &found.advancement_id
                     && first_sighting(&self.state, &self.world_key(), kind)
@@ -488,7 +420,6 @@ impl Watcher {
         }
     }
 
-    /// Which world sightings count for: the singleplayer save, or the server.
     fn world_key(&self) -> String {
         match &self.place {
             Place::Server(address) => format!("server:{}", address.to_lowercase()),
@@ -499,7 +430,6 @@ impl Watcher {
         }
     }
 
-    /// Takes the picture a moment later and saves the memory.
     fn keep(&self, found: Found) {
         let (world, server) = self.world_and_server();
         let now = chrono::Local::now();
@@ -538,15 +468,12 @@ impl Watcher {
     }
 }
 
-/// What a "Vitra moment" line is about.
 enum Report {
     Advancement { id: String, frame: Frame, shown: String, description: Option<String>, spot: Option<Spot> },
     Biome(Found),
     Mob(Found),
 }
 
-/// Reads a "Vitra moment" line. Biomes and mobs outside the kept lists give `None` (biomes are all
-/// kept with `every`).
 fn read_report(r: &serde_json::Value, every: bool) -> Option<Report> {
     let text = |k: &str| r[k].as_str().map(str::to_string);
     let id = text("id")?;
@@ -594,8 +521,6 @@ fn read_report(r: &serde_json::Value, every: bool) -> Option<Report> {
     }
 }
 
-/// "minecraft:story/mine_diamond" → "story.mine_diamond", the form the translations use; other
-/// namespaces keep theirs ("create:root").
 fn advancement_key(id: &str) -> String {
     match id.strip_prefix("minecraft:") {
         Some(path) => path.replace('/', "."),
@@ -603,7 +528,6 @@ fn advancement_key(id: &str) -> String {
     }
 }
 
-/// Notes that this kind of mob was seen in this world; true the first time.
 fn first_sighting(state: &AppState, world: &str, kind: &str) -> bool {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -620,8 +544,6 @@ fn first_sighting(state: &AppState, world: &str, kind: &str) -> bool {
     true
 }
 
-/// The world a singleplayer game has open: the one whose lock file was touched last since the game
-/// started.
 fn open_world(game_dir: &Path, since: i64) -> Option<String> {
     let mut best: Option<(i64, String)> = None;
     for e in std::fs::read_dir(game_dir.join("saves")).ok()?.flatten() {
@@ -633,8 +555,6 @@ fn open_world(game_dir: &Path, since: i64) -> Option<String> {
     }
     best.map(|(_, name)| name)
 }
-
-// ---------------------------------------------------------------- storage
 
 fn dir(state: &AppState) -> PathBuf {
     state.data_dir().join("memories")
@@ -721,7 +641,6 @@ pub fn delete_memory(state: State<'_, Arc<AppState>>, id: String) -> Result<()> 
     Ok(())
 }
 
-/// Shows the memory's picture in the file manager.
 #[tauri::command]
 pub fn reveal_memory(state: State<'_, Arc<AppState>>, id: String) -> Result<()> {
     let memory = load(&state, &id)?;
@@ -743,7 +662,6 @@ mod tests {
         assert_eq!(p.read("k3 has made the advancement [Diamonds!]"), Some(("k3", "Diamonds!", Frame::Task)));
         assert_eq!(p.read("k3 has completed the challenge [Hot Tourist Destinations]"), Some(("k3", "Hot Tourist Destinations", Frame::Challenge)));
         assert_eq!(p.read("[VIP] k3 has reached the goal [The End?]"), Some(("[VIP] k3", "The End?", Frame::Goal)));
-        // Titles may contain the connecting words themselves.
         assert_eq!(p.read("Steve has made the advancement [Who has made the advancement]"), Some(("Steve", "Who has made the advancement", Frame::Task)));
         assert_eq!(p.read("<k3> has made the advancement [lol]"), Some(("<k3>", "lol", Frame::Task)));
         assert_eq!(p.read("k3 joined the game"), None);
@@ -767,7 +685,6 @@ mod tests {
         assert_eq!(p.read("[Défi] : k3"), Some(("k3", "Défi", Frame::Challenge)));
         assert_eq!(p.ids.get("Diamanten!").map(String::as_str), Some("story.mine_diamond"));
         assert_eq!(p.descriptions.get("story.mine_diamond").map(String::as_str), Some("Finde Diamanten"));
-        // A 1.12 .lang file.
         let old = parse_lang(b"# comment\nchat.type.advancement.task=%s has made the advancement %s\nadvancements.end.root.title=The End\n", false);
         assert_eq!(old.get("advancements.end.root.title").map(String::as_str), Some("The End"));
         assert!(Template::parse("no arguments").is_none());
@@ -791,7 +708,6 @@ mod tests {
         assert!(moment(Some("story.mine_stone"), Frame::Task, "Stone Age", None, false).is_none());
         let stone = moment(Some("story.mine_stone"), Frame::Task, "Stone Age", Some("Mine Stone"), true).unwrap();
         assert_eq!((stone.0.as_str(), stone.1.as_str(), stone.2.as_str()), ("advancement", "Stone Age", "Mine Stone"));
-        // Every challenge, modded ones too.
         assert_eq!(moment(None, Frame::Challenge, "Sky Pirate", None, false).unwrap().0, "challenge");
         assert!(moment(None, Frame::Goal, "Some mod goal", None, false).is_none());
     }

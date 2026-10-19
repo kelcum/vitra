@@ -58,7 +58,6 @@ export const LOADER_LABEL: Record<Loader, string> = {
   neoforge: "NeoForge",
 };
 
-/** Local files are served through Tauri's asset protocol. */
 export function fileSrc(path: string | null | undefined): string | undefined {
   if (!path) return undefined;
   if (path.startsWith("http") || path.startsWith("data:")) return path;
@@ -71,7 +70,6 @@ export function hexToRgb(hex: string): [number, number, number] {
   return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
 }
 
-/** WCAG relative luminance — picks readable text on accent fills. */
 export function luminance([r, g, b]: [number, number, number]): number {
   const f = (c: number) => {
     const s = c / 255;

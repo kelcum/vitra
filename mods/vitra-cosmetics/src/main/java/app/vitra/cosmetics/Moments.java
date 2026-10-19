@@ -29,22 +29,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Tells Vitra where the player is and about big moments, through the game log (Vitra reads it while
- * the game runs). Once a second, on the game thread:
- *
- * - "Vitra presence: menu|world|realms|server <address>" when that changes, for the Discord status.
- * - With -Dvitra.moments=true, "Vitra moment: {json}" for Vitra's Memories page:
- *   an advancement the player just finished; a biome the game counts for the first time (the
- *   criteria of "Adventuring Time" and "Hot Tourist Destinations", which the server keeps per player,
- *   so it's the first visit ever, not just this session); a rare mob in sight, once per session.
- *   Each says where the player is. Vitra decides which ones become memories.
- *
- * It only reads what the game already has and never changes anything.
- */
 public final class Moments {
     static final boolean ENABLED = Boolean.getBoolean("vitra.moments");
-    /** Development aid: reports every mob in sight and every finished advancement, shown or not. */
     private static final boolean DEBUG = Boolean.getBoolean("vitra.moments.debug");
 
     private static final Set<String> BIOME_LISTS = Set.of("minecraft:adventure/adventuring_time", "minecraft:nether/explore_nether");
@@ -53,10 +39,8 @@ public final class Moments {
         "minecraft:illusioner", "minecraft:ravager", "minecraft:allay", "minecraft:sniffer",
         "minecraft:creaking", "minecraft:skeleton_horse");
     private static final double SIGHT = 24;
-    /** More than this many at once is the server resending everything (a proxy switching servers), not play. */
     private static final int BURST = 3;
 
-    /** Whose progress the snapshot below is of: a new connection starts a new snapshot. */
     private static ClientAdvancements tracked;
     private static final Map<Identifier, Boolean> done = new HashMap<>();
     private static final Map<Identifier, Set<String>> criteria = new HashMap<>();
@@ -119,7 +103,6 @@ public final class Moments {
             Identifier id = e.getKey().id();
             AdvancementProgress progress = e.getValue();
             boolean now = progress.isDone();
-            // The first look at an advancement only notes where it stands.
             Boolean before = done.put(id, now);
             DisplayInfo display = e.getKey().value().display().orElse(null);
             if (before != null && !before && now && (display != null || DEBUG)) {
@@ -166,7 +149,6 @@ public final class Moments {
         }
     }
 
-    /** "minecraft:warden", or a rare look of a common mob ("minecraft:axolotl/blue"); else null. */
     private static String rareKind(Entity entity) {
         String type = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
         if (RARE_MOBS.contains(type)) return type;
@@ -182,7 +164,6 @@ public final class Moments {
         return biome == null ? id : Component.translatable("biome." + biome.getNamespace() + "." + biome.getPath()).getString();
     }
 
-    /** Adds where the player is and writes the line. */
     private static void report(JsonObject o, LocalPlayer player, ClientLevel level) {
         BlockPos pos = player.blockPosition();
         o.addProperty("dimension", level.dimension().identifier().toString());
@@ -196,7 +177,6 @@ public final class Moments {
         VitraCosmetics.LOG.info("Vitra moment: {}", o);
     }
 
-    /** Where the player is: "menu", "world", "realms" or "server <address>". */
     private static String place() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.getConnection() == null) return "menu";

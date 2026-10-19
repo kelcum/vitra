@@ -1,6 +1,3 @@
-//! Mod loader metadata: available versions and Fabric/Quilt launch profiles.
-//! Forge and NeoForge need their installer run, see `forge.rs`.
-
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -43,8 +40,6 @@ struct MetaGame {
     stable: bool,
 }
 
-/// NeoForge versions encode the Minecraft version: `21.1.x` → 1.21.1,
-/// `21.0.x` → 1.21, and since the year-based scheme `26.3.0.x` → 26.3.
 pub fn neoforge_prefix(game: &str) -> Option<String> {
     let parts: Vec<&str> = game.split('.').collect();
     if parts.first() == Some(&"1") {
@@ -106,8 +101,6 @@ async fn neoforge_versions(state: &AppState) -> Result<Vec<String>> {
     Ok(r.versions)
 }
 
-/// Sort key for `1.2.3[-beta.N]`: numbers compare numerically and a final
-/// release sorts above its pre-releases.
 fn version_key(v: &str) -> (Vec<u64>, u8, u64) {
     let (core, pre) = match v.split_once('-') {
         Some((c, p)) => (c, Some(p)),
@@ -118,7 +111,6 @@ fn version_key(v: &str) -> (Vec<u64>, u8, u64) {
     (nums, if pre.is_none() { 1 } else { 0 }, pre_n)
 }
 
-/// Loader versions available for a Minecraft version, newest first.
 pub async fn loader_versions(state: &AppState, loader: &str, game: &str) -> Result<Vec<LoaderVersion>> {
     match loader {
         "fabric" | "quilt" => {
@@ -134,7 +126,6 @@ pub async fn loader_versions(state: &AppState, loader: &str, game: &str) -> Resu
                     LoaderVersion { version: e.loader.version, stable, recommended: false }
                 })
                 .collect();
-            // Quilt's meta isn't ordered; show newest first.
             out.sort_by(|a, b| version_key(&b.version).cmp(&version_key(&a.version)));
             if let Some(first) = out.iter_mut().find(|v| v.stable) {
                 first.recommended = true;
@@ -182,7 +173,6 @@ pub async fn loader_versions(state: &AppState, loader: &str, game: &str) -> Resu
     }
 }
 
-/// Minecraft versions a loader supports (used to filter the version picker).
 pub async fn supported_game_versions(state: &AppState, loader: &str) -> Result<Vec<String>> {
     match loader {
         "fabric" | "quilt" => {
@@ -216,7 +206,6 @@ pub async fn supported_game_versions(state: &AppState, loader: &str) -> Result<V
     }
 }
 
-/// Picks the recommended loader version when the instance doesn't pin one.
 pub async fn resolve_loader_version(state: &AppState, loader: &str, game: &str, pinned: Option<String>) -> Result<String> {
     if let Some(v) = pinned.filter(|v| !v.is_empty()) {
         return Ok(v);
@@ -230,8 +219,6 @@ pub async fn resolve_loader_version(state: &AppState, loader: &str, game: &str, 
         .ok_or_else(|| format!("{loader} doesn't support Minecraft {game} yet.").into())
 }
 
-/// Fabric/Quilt publish a ready-made launch profile; cache it next to the
-/// version so offline launches keep working.
 pub async fn fabric_like_profile(state: &AppState, loader: &str, game: &str, version: &str) -> Result<VersionJson> {
     let base = match loader {
         "fabric" => FABRIC_META,

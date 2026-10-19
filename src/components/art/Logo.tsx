@@ -1,6 +1,5 @@
 import { motion } from "motion/react";
 
-/** The Vitra glass cube. `reveal` draws it in for the boot sequence. */
 export function Logo({ size = 22, reveal = false }: { size?: number; reveal?: boolean }) {
   const faces = [
     { d: "M50 8 L88 30 L50 52 L12 30 Z", fill: "url(#lg-top)", delay: 0.05 },

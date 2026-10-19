@@ -2,7 +2,6 @@
   gap: 18px;
 }
 
-/* ---------------------------------------------------------------- hero */
 .hero {
   position: relative;
   display: flex;
@@ -13,7 +12,6 @@
   justify-content: flex-end;
 }
 
-/* ---------------------------------------------------------------- you, in 3D */
 .hero--with-player {
   padding-right: calc(48px + clamp(220px, 27%, 330px));
 }
@@ -41,7 +39,6 @@
   pointer-events: none;
 }
 .hero-player::after {
-  /* the shadow it stands on */
   content: "";
   position: absolute;
   left: 28%;
@@ -188,7 +185,6 @@
   margin-top: 18px;
 }
 
-/* ---------------------------------------------------------------- welcome */
 .welcome {
   padding: 56px 36px 8px;
 }
@@ -249,19 +245,16 @@
   font-weight: 650;
 }
 
-/* ---------------------------------------------------------------- grid */
 .home-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 14px;
 }
-/* Cards in a row share a height; their contents stretch to fill it instead of leaving a gap. */
 .home-grid > .panel {
   display: flex;
   flex-direction: column;
 }
 
-/* ---------------------------------------------------------------- Vitra */
 .vitra-live {
   display: inline-flex;
   align-items: center;
@@ -435,7 +428,6 @@
   transform: scale(0.97);
 }
 
-/* ---------------------------------------------------------------- news */
 .news-row {
   display: flex;
   gap: 14px;

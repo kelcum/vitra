@@ -23,7 +23,6 @@ import { fileSrc, formatBytes, relativeTime } from "../../lib/format";
 import { toast, useDialogs, useNav } from "../../lib/store";
 import type { ContentItem, InstanceView, TrashItem, UpdateInfo } from "../../lib/types";
 
-/** Accept files dropped onto the window while this tab is open. */
 export function useFileDrop(onDrop: (paths: string[]) => void, enabled = true) {
   const [hovering, setHovering] = useState(false);
   useEffect(() => {
@@ -40,7 +39,6 @@ export function useFileDrop(onDrop: (paths: string[]) => void, enabled = true) {
         }
       })
       .then((u) => {
-        // Unmounted before the listener was ready: remove it right away instead of leaking it.
         if (gone) u();
         else unlisten = u;
       });

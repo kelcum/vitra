@@ -20,10 +20,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Who around us uses Vitra, and which cape they wear. A background thread looks up players as they
- * appear in the tab list and, when we have a token, tells api.xan.gripe we're playing on Vitra.
- */
 public final class Directory {
     public record Cape(String id, String url, int width, int height, int frames, int delay) {}
 
@@ -46,7 +42,6 @@ public final class Directory {
         t.start();
     }
 
-    /** Which badge to draw next to this player ("vitra" or "owner"), or null for none. */
     public static String badge(UUID id) {
         Entry e = players.get(id);
         if (e != null && e.online) return e.badge;
@@ -85,7 +80,7 @@ public final class Directory {
             List<UUID> ask = around.size() > BATCH ? around.subList(0, BATCH) : around;
             JsonObject res = post("/v1/ping", ask, true);
             if (res == null) {
-                tokenWorks = false;                      // expired: carry on with plain lookups
+                tokenWorks = false;
             } else {
                 store(ask, res, now);
                 players.compute(self(), (k, e) -> new Entry(true, true, e == null ? "vitra" : e.badge, e == null ? null : e.cape, now));
@@ -99,12 +94,10 @@ public final class Directory {
             if (unknown.size() == BATCH) break;
         }
         if (unknown.isEmpty()) return;
-        // With our token the server also says who is on Vitra right now; without it, only capes.
         JsonObject res = post("/v1/lookup", unknown, tokenWorks);
         if (res != null) store(unknown, res, now);
     }
 
-    /** Players in the tab list (that's everyone the server tells us about), plus ourselves. Runs on the game thread. */
     private static List<UUID> playersAround() {
         List<UUID> ids = new ArrayList<>();
         ids.add(self());
@@ -112,7 +105,7 @@ public final class Directory {
         if (connection != null) {
             for (PlayerInfo info : connection.getOnlinePlayers()) {
                 UUID id = info.getProfile().id();
-                if (id.version() == 4 && !ids.contains(id)) ids.add(id);   // version 4 = a real Mojang account
+                if (id.version() == 4 && !ids.contains(id)) ids.add(id);
             }
         }
         return ids;
