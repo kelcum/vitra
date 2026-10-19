@@ -111,7 +111,7 @@ fn loader_name(loader: &str) -> &str {
 }
 
 /// Where a log line says the player is now, if it says so.
-fn place_from_log(line: &str) -> Option<Place> {
+pub(crate) fn place_from_log(line: &str) -> Option<Place> {
     let line = line.trim();
     // Written by the Vitra Cosmetics mod: "menu", "world", "realms" or "server <address>".
     if let Some((_, what)) = line.split_once("Vitra presence: ") {

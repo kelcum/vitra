@@ -52,6 +52,8 @@
 - **Skins, capes and names.** 3D viewer, popular skins, free animated Vitra capes (GIFs too), and name changes with
   close free names suggested when yours is taken.
 - **Vitra badge.** Players using Vitra see a badge next to each other's names, and each other's capes, in game.
+- **Memories.** A picture of your big moments, like the first diamonds or beating the Ender Dragon, kept automatically
+  as a timeline. Works in every version and modpack, in any game language, with nothing running inside the game.
 
 ## Status
 
@@ -71,6 +73,7 @@ What works today (verified end to end on Windows 11 by installing and launching 
 | Name changes | ✅ Checks names with Mojang, suggests the closest free ones when a name is taken, explains the 30-day limit and changes it in one click. Screens tested with stand-in data; the live Mojang calls need a signed-in account |
 | Vitra cosmetics | ✅ Free capes (five animated presets, or any picture/GIF turned into a cape with matching elytra) and a Vitra badge (animated for the owner) shown in game to other Vitra players. Fabric 26.3; the mod ships inside Vitra and is added at launch, so mods folders stay untouched. Players can delete their data from Settings |
 | Discord status | ✅ Built-in Rich Presence (no plugin): Vitra version, in the launcher / main menu / singleplayer / on a server with its name and live player count, and a "Get Vitra" button. Follows the game through its log; clears when turned off or when Vitra closes |
+| Memories | ✅ Reads advancement announcements from the game log (formats and titles from the game's own translations, so any language), keeps hand-picked milestones, every challenge and optionally every advancement, and takes a picture of the game window (Windows Graphics Capture, client area only) as the toast appears. Timeline page with filters, search, favorites, viewer, delete. Verified on 26.3 (English and German) with injected log lines; a minimized game gets a memory without a picture |
 | Performance | ✅ Hardware detection, 3 presets (writes real `options.txt` values + installs optimization mods + GC preset), optimization-mod picker, render/simulation distance, FPS cap, VSync, memory recommendations |
 | Instances | ✅ Create, duplicate, back up (zip), delete, rename, icons, cover pictures from your screenshots, per-instance Java/memory/JVM args/window size/game folder, repair (full re-verify) |
 | Import | ✅ Prism Launcher / PolyMC / MultiMC, CurseForge, Modrinth App, ATLauncher, GDLauncher and the official launcher, plus any plain `.minecraft` folder (auto-detected or pick a folder): version, loader, memory, play time, then a verified copy of mods, config, packs, shaders and worlds. The source is never modified |
@@ -106,7 +109,7 @@ src/                     React UI (no direct filesystem/network access)
   lib/events.ts          backend events → stores (task progress, game logs, exits, auth)
   styles/tokens.css      design tokens: color, glass, radius, motion, type (dark + light)
   components/ui/         design-system primitives (Button, Select, Slider, Modal, Tabs, …)
-  features/<page>/       Home, Library, Instance, Discover, Servers, Skins, Performance, Settings, Boot
+  features/<page>/       Home, Library, Instance, Memories, Discover, Servers, Skins, Performance, Settings, Boot
 src-tauri/src/           Rust backend
   net.rs                 parallel downloader: retries, resume (HTTP Range), SHA-1 verification
   tasks.rs               progress reporting (atomic counters, throttled events, honest progress)
@@ -118,6 +121,7 @@ src-tauri/src/           Rust backend
   skins.rs               skins, capes and name changes (Mojang profile API)
   cosmetics.rs           Vitra badges and capes: ownership proof, game token, launch arguments, data deletion
   presence.rs discord.rs Discord Rich Presence: what to show, and a small client for Discord's local IPC
+  memories.rs capture.rs Memories: advancements from the game log, pictures of the game window, storage
   system.rs              system info, news, panorama, logs, storage
 mods/vitra-cosmetics/    the Fabric mod that draws badges and capes in game (plain javac, no Gradle)
 services/vitra-api/      api.xan.gripe: Cloudflare Worker + D1 for cosmetics (who uses Vitra, capes)

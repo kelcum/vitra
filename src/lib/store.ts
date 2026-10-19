@@ -62,7 +62,7 @@ export const useSettings = create<SettingsStore>((set, get) => ({
 
 // ------------------------------------------------------------------ navigation
 
-export type Page = "home" | "library" | "instance" | "discover" | "servers" | "skins" | "performance" | "settings";
+export type Page = "home" | "library" | "instance" | "memories" | "discover" | "servers" | "skins" | "performance" | "settings";
 
 interface NavStore {
   page: Page;

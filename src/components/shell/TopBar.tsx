@@ -8,6 +8,7 @@ import {
   Copy,
   Gauge,
   House,
+  Images,
   LayoutGrid,
   LogIn,
   LogOut,
@@ -33,6 +34,7 @@ import { Popover } from "../ui/Overlay";
 const NAV: { page: Page; label: string; icon: React.ReactNode; match?: Page[] }[] = [
   { page: "home", label: "Home", icon: <House /> },
   { page: "library", label: "Library", icon: <LayoutGrid />, match: ["instance"] },
+  { page: "memories", label: "Memories", icon: <Images /> },
   { page: "discover", label: "Discover", icon: <Compass /> },
   { page: "servers", label: "Servers", icon: <Server /> },
   { page: "skins", label: "Skins", icon: <Shirt /> },

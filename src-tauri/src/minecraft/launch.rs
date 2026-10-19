@@ -105,6 +105,10 @@ pub fn split_args(s: &str) -> Vec<String> {
     out
 }
 
+fn asset_index_id(v: &manifest::VersionJson) -> String {
+    v.asset_index.as_ref().map(|a| a.id.clone()).or_else(|| v.assets.clone()).unwrap_or_default()
+}
+
 fn build_classpath(state: &AppState, installed: &Installed) -> String {
     let libs = state.libraries_dir();
     let mut entries: Vec<String> = Vec::new();
@@ -181,7 +185,7 @@ pub fn build_command(
     let mut vars: HashMap<&str, String> = HashMap::new();
     let classpath = build_classpath(state, installed);
     let assets_root = state.assets_dir();
-    let asset_index = v.asset_index.as_ref().map(|a| a.id.clone()).or_else(|| v.assets.clone()).unwrap_or_default();
+    let asset_index = asset_index_id(v);
     vars.insert("auth_player_name", identity.name.clone());
     vars.insert("version_name", v.id.clone());
     vars.insert("game_directory", game_dir.to_string_lossy().to_string());
@@ -470,10 +474,10 @@ pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Re
             args.splice(at..at, cosmetics);
         }
         write_launch_record(&state, &inst, &installed.java, &args, &identity.token);
-        Ok::<_, crate::error::Error>((inst, installed, args))
+        Ok::<_, crate::error::Error>((inst, installed, args, identity.name))
     }
     .await;
-    let (inst, installed, args) = task.complete(prepared)?;
+    let (inst, installed, args, player) = task.complete(prepared)?;
 
     let game_dir = instances::game_dir(&state, &inst);
     let mut cmd = tokio::process::Command::new(&installed.java);
@@ -490,13 +494,13 @@ pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Re
     let pid = child.id().unwrap_or(0);
     let started_at = util::now_millis();
     let (kill_tx, mut kill_rx) = tokio::sync::watch::channel(false);
-    state.running.lock().unwrap().insert(id.clone(), RunningGame { pid, started_at, kill: kill_tx });
+    // Log pipeline: readers → channel → batched emits (~8/sec).
+    let (tx, mut rx) = mpsc::unbounded_channel::<LogLine>();
+    state.running.lock().unwrap().insert(id.clone(), RunningGame { pid, started_at, kill: kill_tx, log: tx.downgrade() });
     state.presence.game_started(&inst, started_at);
     let _ = state.app.emit("game://started", serde_json::json!({ "instanceId": id, "pid": pid }));
     set_window_for_game(&state, true);
 
-    // Log pipeline: readers → channel → batched emits (~8/sec).
-    let (tx, mut rx) = mpsc::unbounded_channel::<LogLine>();
     if let Some(out) = child.stdout.take() {
         let tx = tx.clone();
         tauri::async_runtime::spawn(async move {
@@ -524,6 +528,18 @@ pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Re
     let app = state.app.clone();
     let log_id = id.clone();
     let log_state = state.clone();
+    let mut memories = crate::memories::Watcher::new(
+        state.clone(),
+        crate::memories::GameInfo {
+            instance: inst.clone(),
+            game_dir: game_dir.clone(),
+            client_jar: installed.client_jar.clone(),
+            asset_index: asset_index_id(&installed.version),
+            player,
+            pid,
+            started_at,
+        },
+    );
     let tail_handle = tauri::async_runtime::spawn(async move {
         let mut tail: Vec<String> = Vec::new();
         let mut batch: Vec<LogLine> = Vec::new();
@@ -533,6 +549,7 @@ pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Re
                 line = rx.recv() => match line {
                     Some(l) => {
                         log_state.presence.game_log(&log_id, &l.text);
+                        memories.line(&l.text);
                         tail.push(l.text.clone());
                         if tail.len() > 40 { tail.remove(0); }
                         batch.push(l);
@@ -619,6 +636,19 @@ pub fn stop_instance(state: State<'_, Arc<AppState>>, id: String) -> Result<()> 
         }
         None => bail!("The game isn't running."),
     }
+}
+
+/// Development builds only: feeds a line into a running game's log as if the game had printed it,
+/// to try log-driven features (Memories, the Discord status) without playing.
+#[tauri::command]
+pub fn inject_game_log(state: State<'_, Arc<AppState>>, id: String, text: String) -> Result<()> {
+    if !cfg!(debug_assertions) {
+        bail!("Only available in development builds.");
+    }
+    let running = state.running.lock().unwrap();
+    let Some(tx) = running.get(&id).and_then(|g| g.log.upgrade()) else { bail!("The game isn't running.") };
+    let _ = tx.send(LogLine { level: "INFO".into(), thread: Some("Render thread".into()), text, time: util::now_millis() });
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize)]

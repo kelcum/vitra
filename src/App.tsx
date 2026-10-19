@@ -13,6 +13,7 @@ import { startUpdateChecks } from "./lib/updater";
 // Heavier pages load on first visit so startup stays fast.
 const Library = lazy(() => import("./features/library/Library"));
 const InstancePage = lazy(() => import("./features/instance/InstancePage"));
+const Memories = lazy(() => import("./features/memories/Memories"));
 const Discover = lazy(() => import("./features/discover/Discover"));
 const Servers = lazy(() => import("./features/servers/Servers"));
 const Skins = lazy(() => import("./features/skins/Skins"));
@@ -51,6 +52,7 @@ function Shell() {
                 {page === "home" && <Home />}
                 {page === "library" && <Library />}
                 {page === "instance" && <InstancePage id={params.id} initialTab={params.tab} />}
+                {page === "memories" && <Memories />}
                 {page === "discover" && <Discover initialType={params.type} />}
                 {page === "servers" && <Servers />}
                 {page === "skins" && <Skins />}

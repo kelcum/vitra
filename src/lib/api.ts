@@ -40,6 +40,14 @@ export const api = {
   launch: (id: string, options?: { world?: string | null; server?: string | null; demo?: boolean }) => invoke<void>("launch_instance", { id, options }),
   stop: (id: string) => invoke<void>("stop_instance", { id }),
   runningInstances: () => invoke<T.RunningInfo[]>("running_instances"),
+  /** Development builds only: a line in a running game's log, as if the game printed it. */
+  injectGameLog: (id: string, text: string) => invoke<void>("inject_game_log", { id, text }),
+
+  // memories
+  listMemories: () => invoke<T.Memory[]>("list_memories"),
+  setMemoryFavorite: (id: string, favorite: boolean) => invoke<T.Memory>("set_memory_favorite", { id, favorite }),
+  deleteMemory: (id: string) => invoke<void>("delete_memory", { id }),
+  revealMemory: (id: string) => invoke<void>("reveal_memory", { id }),
 
   // java
   listJava: () => invoke<T.JavaInstall[]>("list_java"),
