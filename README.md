@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://xan.gripe/vitra/"><img alt="Website" src="https://img.shields.io/badge/website-xan.gripe%2Fvitra-ff7eb6?style=flat-square"></a>
-  <img alt="Version 0.1.5" src="https://img.shields.io/badge/version-0.1.5-8c5cff?style=flat-square">
+  <img alt="Version 0.1.6" src="https://img.shields.io/badge/version-0.1.6-8c5cff?style=flat-square">
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%26%2011-2f7fd8?style=flat-square">
   <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24c8db?style=flat-square">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-backend-dea584?style=flat-square">
