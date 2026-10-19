@@ -66,6 +66,10 @@ pub struct Settings {
     pub discord_presence: bool,
     /// Name the server you're on in that status.
     pub discord_show_server: bool,
+    /// Keep a picture of big first-time moments (Memories).
+    pub memories: bool,
+    /// Also keep every other advancement, not just the milestones and challenges.
+    pub memories_every_advancement: bool,
 
     // Game defaults
     pub game_data_dir: Option<String>,
@@ -106,6 +110,8 @@ impl Default for Settings {
             cosmetics: true,
             discord_presence: true,
             discord_show_server: true,
+            memories: true,
+            memories_every_advancement: false,
             game_data_dir: None,
             download_concurrency: 16,
             default_memory_mb: recommended_memory_mb(false),

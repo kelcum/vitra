@@ -3,14 +3,23 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { create } from "zustand";
 import { api } from "./api";
 import { formatDuration } from "./format";
-import type { Account, GameExit, LogLine, Settings, TaskSnapshot } from "./types";
-import { toast, useAccounts, useDialogs, useInstances, useLogs, useSettings, useTasks } from "./store";
+import type { Account, GameExit, LogLine, Memory, Settings, TaskSnapshot } from "./types";
+import { toast, useAccounts, useDialogs, useInstances, useLogs, useNav, useSettings, useTasks, useToasts } from "./store";
 
 /** Bumped whenever an instance's installed content changes. */
 export const useContentVersion = create<{ v: number; bump: () => void }>((set) => ({
   v: 0,
   bump: () => set((s) => ({ v: s.v + 1 })),
 }));
+
+/** Bumped whenever a memory is saved. */
+export const useMemoryVersion = create<{ v: number; bump: () => void }>((set) => ({
+  v: 0,
+  bump: () => set((s) => ({ v: s.v + 1 })),
+}));
+
+/** Memories made in each running game, announced when it closes. */
+const newMemories = new Map<string, Memory[]>();
 
 // Backups aren't here: the Back up menu item says where the file went.
 const NOTIFY_KINDS = new Set(["install", "modpack", "content", "java", "export", "copy"]);
@@ -91,8 +100,17 @@ export async function wireEvents() {
     refreshRunning();
     useInstances.getState().refresh();
     const s = useSettings.getState().settings;
+    const made = newMemories.get(payload.instanceId) ?? [];
+    newMemories.delete(payload.instanceId);
     if (payload.crashed) {
       if (s?.notifications.crashes ?? true) useDialogs.getState().set({ crash: payload });
+    } else if (made.length > 0) {
+      useToasts.getState().push({
+        kind: "success",
+        title: made.length === 1 ? "A new memory" : `${made.length} new memories`,
+        body: made.length === 1 ? made[0].title : `${made[0].title} and ${made.length - 1} more`,
+        action: { label: "View", run: () => useNav.getState().navigate("memories") },
+      });
     } else if (!payload.killed && payload.playedSecs > 60) {
       toast.info("Thanks for playing", `Session length: ${formatDuration(payload.playedSecs)}`);
     }
@@ -106,6 +124,10 @@ export async function wireEvents() {
   });
 
   await listen<{ instanceId: string }>("content://changed", () => useContentVersion.getState().bump());
+  await listen<Memory>("memory://added", ({ payload }) => {
+    newMemories.set(payload.instanceId, [...(newMemories.get(payload.instanceId) ?? []), payload]);
+    useMemoryVersion.getState().bump();
+  });
   await listen("instances://changed", () => useInstances.getState().refresh());
   // The backend changed a setting (selected instance after an install, active account, …).
   await listen<Settings>("settings://changed", ({ payload }) => useSettings.getState().external(payload));

@@ -17,6 +17,8 @@ pub struct RunningGame {
     pub pid: u32,
     pub started_at: i64,
     pub kill: tokio::sync::watch::Sender<bool>,
+    /// The game's log pipeline, for `inject_game_log` in development builds.
+    pub log: tokio::sync::mpsc::WeakUnboundedSender<crate::minecraft::launch::LogLine>,
 }
 
 /// Shared application state. Cheap to clone via `Arc`, so long-running

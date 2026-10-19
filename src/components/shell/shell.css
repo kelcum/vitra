@@ -7,10 +7,11 @@
 }
 
 /* ---------------------------------------------------------------- top bar
-   Three columns so the navigation pill is always truly centered. */
+   Three columns so the navigation pill is centered; when the window is tight it moves aside rather
+   than run into the buttons on the right. */
 .topbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
   align-items: center;
   gap: 16px;
   height: var(--topbar-h);
@@ -442,6 +443,19 @@
 }
 .toast-title {
   font-weight: 620;
+}
+.toast-action {
+  margin-top: 8px;
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  background: rgb(var(--accent-rgb) / 0.16);
+  color: var(--accent-text);
+  font-size: var(--fs-sm);
+  font-weight: 620;
+  transition: background var(--d-1) ease;
+}
+.toast-action:hover {
+  background: rgb(var(--accent-rgb) / 0.26);
 }
 .toast-body {
   margin-top: 2px;

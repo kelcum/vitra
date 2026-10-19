@@ -295,6 +295,18 @@ function Toasts() {
               <div className="grow">
                 <div className="toast-title">{t.title}</div>
                 {t.body && <div className="toast-body">{t.body}</div>}
+                {t.action && (
+                  <button
+                    className="toast-action"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      t.action?.run();
+                      dismiss(t.id);
+                    }}
+                  >
+                    {t.action.label}
+                  </button>
+                )}
               </div>
             </motion.div>
           );

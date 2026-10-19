@@ -5,6 +5,7 @@
 //! process work happens here, asynchronously, so the interface never blocks.
 
 mod auth;
+mod capture;
 mod content;
 mod cosmetics;
 mod discord;
@@ -12,6 +13,7 @@ mod error;
 mod importer;
 mod instances;
 mod java;
+mod memories;
 mod minecraft;
 mod modpack;
 mod modrinth;
@@ -105,6 +107,12 @@ pub fn run() {
             minecraft::launch::launch_instance,
             minecraft::launch::stop_instance,
             minecraft::launch::running_instances,
+            minecraft::launch::inject_game_log,
+            // memories
+            memories::list_memories,
+            memories::set_memory_favorite,
+            memories::delete_memory,
+            memories::reveal_memory,
             // java
             java::list_java,
             java::inspect_java,

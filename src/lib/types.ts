@@ -32,6 +32,10 @@ export interface Settings {
   discordPresence: boolean;
   /** Name the server you're on in that status. */
   discordShowServer: boolean;
+  /** Keep a picture of big first-time moments. */
+  memories: boolean;
+  /** Also keep every other advancement. */
+  memoriesEveryAdvancement: boolean;
   notifications: { downloads: boolean; crashes: boolean; gameUpdates: boolean };
   gameDataDir: string | null;
   downloadConcurrency: number;
@@ -43,6 +47,31 @@ export interface Settings {
   activeAccount: string | null;
   selectedInstance: string | null;
   onboarded: boolean;
+}
+
+export type MemoryCategory = "treasure" | "nether" | "end" | "boss" | "milestone" | "adventure" | "challenge" | "advancement";
+
+/** A big moment Vitra kept a picture of. */
+export interface Memory {
+  id: string;
+  at: number;
+  instanceId: string;
+  instanceName: string;
+  gameVersion: string;
+  loader: Loader;
+  /** Singleplayer world folder. */
+  world: string | null;
+  /** Server name (or address). */
+  server: string | null;
+  category: MemoryCategory;
+  title: string;
+  description: string;
+  /** The advancement as the game showed it, and its id when known. */
+  advancement: string;
+  advancementId: string | null;
+  favorite: boolean;
+  image?: string;
+  thumb?: string;
 }
 
 export interface WindowSettings {
