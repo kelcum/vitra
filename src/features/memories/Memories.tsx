@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Compass,
+  Copy,
   ExternalLink,
   Flag,
   Flame,
@@ -11,12 +12,15 @@ import {
   Gem,
   Globe,
   Images,
+  MapPin,
+  PawPrint,
   Server,
   Settings2,
   Sparkles,
   Star,
   Swords,
   Trash2,
+  Trees,
   Trophy,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
@@ -28,7 +32,7 @@ import { api, errorMessage } from "../../lib/api";
 import { useMemoryVersion } from "../../lib/events";
 import { cx, fileSrc, LOADER_LABEL } from "../../lib/format";
 import { toast, useNav, useSettings } from "../../lib/store";
-import type { Memory, MemoryCategory } from "../../lib/types";
+import type { Memory, MemoryCategory, MemorySpot } from "../../lib/types";
 import { useWheelScrollX } from "../../lib/wheel";
 import "./memories.css";
 
@@ -37,6 +41,8 @@ const CATEGORY: Record<MemoryCategory, { label: string; icon: ReactNode; color: 
   nether: { label: "Nether", icon: <Flame />, color: "#ff7a52" },
   end: { label: "The End", icon: <Sparkles />, color: "#c69cff" },
   boss: { label: "Bosses", icon: <Swords />, color: "#ff5d7d" },
+  biome: { label: "Biomes", icon: <Trees />, color: "#b4e05c" },
+  mob: { label: "Creatures", icon: <PawPrint />, color: "#ff94c8" },
   milestone: { label: "Milestones", icon: <Flag />, color: "#ffcf5a" },
   adventure: { label: "Adventure", icon: <Compass />, color: "#73d98f" },
   challenge: { label: "Challenges", icon: <Trophy />, color: "#ffa94d" },
@@ -51,6 +57,22 @@ const catStyle = (c: MemoryCategory) => ({ "--cat": CATEGORY[c].color }) as CSSP
 function place(m: Memory) {
   return m.world ?? m.server ?? null;
 }
+
+const DIMENSIONS: Record<string, string> = {
+  "minecraft:overworld": "Overworld",
+  "minecraft:the_nether": "The Nether",
+  "minecraft:the_end": "The End",
+};
+
+/** "Cherry Grove, Overworld" */
+function region(s: MemorySpot) {
+  const dimension = DIMENSIONS[s.dimension] ?? s.dimension;
+  const biome = s.biomeName ?? s.biome;
+  return biome ? `${biome}, ${dimension}` : dimension;
+}
+
+/** What the game calls the thing a memory is about. */
+const SUBJECT: Partial<Record<MemoryCategory, string>> = { biome: "Biome", mob: "Creature" };
 
 function dayLabel(at: number) {
   const d = new Date(at);
@@ -111,7 +133,7 @@ export default function Memories() {
     return all.filter((m) => {
       if (filter === "favorites" ? !m.favorite : filter !== "all" && m.category !== filter) return false;
       if (!q) return true;
-      return [m.title, m.description, m.advancement, m.world, m.server, m.instanceName, CATEGORY[m.category].label]
+      return [m.title, m.description, m.advancement, m.world, m.server, m.instanceName, CATEGORY[m.category].label, m.spot?.biomeName]
         .join(" ")
         .toLowerCase()
         .includes(q);
@@ -338,6 +360,31 @@ function MemoryCard({ memory: m, onOpen, onFavorite }: { memory: Memory; onOpen:
   );
 }
 
+function Location({ spot }: { spot: MemorySpot }) {
+  const coords = `${spot.x} ${spot.y} ${spot.z}`;
+  return (
+    <div className="memory-location">
+      <dt>
+        <MapPin /> Location
+      </dt>
+      <dd className="truncate">{region(spot)}</dd>
+      <button
+        className="memory-coords"
+        data-tip="Copy coordinates"
+        onClick={() =>
+          navigator.clipboard
+            .writeText(coords)
+            .then(() => toast.success("Coordinates copied", coords))
+            .catch(() => toast.error("Couldn't copy the coordinates"))
+        }
+      >
+        {coords}
+        <Copy />
+      </button>
+    </div>
+  );
+}
+
 function MemoryViewer({
   memory: m,
   onClose,
@@ -423,6 +470,7 @@ function MemoryViewer({
               <dt>{shown.server ? "Server" : "World"}</dt>
               <dd className="truncate">{place(shown) ?? "Unknown"}</dd>
             </div>
+            {shown.spot && <Location spot={shown.spot} />}
             <div>
               <dt>Instance</dt>
               <dd className="truncate">
@@ -430,7 +478,7 @@ function MemoryViewer({
               </dd>
             </div>
             <div>
-              <dt>Advancement</dt>
+              <dt>{SUBJECT[shown.category] ?? "Advancement"}</dt>
               <dd className="truncate">{shown.advancement}</dd>
             </div>
           </dl>

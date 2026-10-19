@@ -49,7 +49,28 @@ export interface Settings {
   onboarded: boolean;
 }
 
-export type MemoryCategory = "treasure" | "nether" | "end" | "boss" | "milestone" | "adventure" | "challenge" | "advancement";
+export type MemoryCategory =
+  | "treasure"
+  | "nether"
+  | "end"
+  | "boss"
+  | "biome"
+  | "mob"
+  | "milestone"
+  | "adventure"
+  | "challenge"
+  | "advancement";
+
+/** Where a memory happened (Fabric 26.3 instances). */
+export interface MemorySpot {
+  dimension: string;
+  biome: string | null;
+  /** In the game's language. */
+  biomeName: string | null;
+  x: number;
+  y: number;
+  z: number;
+}
 
 /** A big moment Vitra kept a picture of. */
 export interface Memory {
@@ -66,9 +87,10 @@ export interface Memory {
   category: MemoryCategory;
   title: string;
   description: string;
-  /** The advancement as the game showed it, and its id when known. */
+  /** What the game calls it (advancement, biome or mob), and its id when known. */
   advancement: string;
   advancementId: string | null;
+  spot?: MemorySpot | null;
   favorite: boolean;
   image?: string;
   thumb?: string;

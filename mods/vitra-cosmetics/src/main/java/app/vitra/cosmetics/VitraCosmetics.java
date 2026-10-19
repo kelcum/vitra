@@ -11,11 +11,16 @@ import org.slf4j.LoggerFactory;
  *
  * Vitra starts the game with -Dvitra.cosmetics.token=… so this player counts as "on Vitra" while
  * they play; without a token the mod still shows everyone else's badges and capes.
+ *
+ * The mod also tells Vitra where the player is and about big moments (see Moments). When the player
+ * turned badges and capes off, Vitra still adds the mod for its Memories, with
+ * -Dvitra.cosmetics.off=true: then it draws nothing and never goes online.
  */
 public final class VitraCosmetics implements ClientModInitializer {
     public static final Logger LOG = LoggerFactory.getLogger("Vitra Cosmetics");
     public static final String API = System.getProperty("vitra.cosmetics.api", "https://api.xan.gripe");
     public static final String TOKEN = System.getProperty("vitra.cosmetics.token", "");
+    public static final boolean OFF = Boolean.getBoolean("vitra.cosmetics.off");
 
     /** The badge is a glyph in this mod's font, which only loads when Fabric API's resource loader is there. */
     public static boolean badgesAvailable;
@@ -24,9 +29,11 @@ public final class VitraCosmetics implements ClientModInitializer {
     public void onInitializeClient() {
         FabricLoader loader = FabricLoader.getInstance();
         badgesAvailable = loader.isModLoaded("fabric-resource-loader-v1") || loader.isModLoaded("fabric-resource-loader-v0");
-        if (!badgesAvailable) LOG.warn("Fabric API isn't installed, so Vitra badges are off (capes still work)");
+        if (!badgesAvailable && !OFF) LOG.warn("Fabric API isn't installed, so Vitra badges are off (capes still work)");
         if (Boolean.getBoolean("vitra.cosmetics.selftest")) selfTest();
-        Directory.start();
+        // With no token and nothing looked up, the badge and cape hooks find nothing to draw.
+        if (!OFF) Directory.start();
+        Moments.start();
     }
 
     /** Loads every class this mod changes, so a broken hook shows up at startup instead of mid-game. */

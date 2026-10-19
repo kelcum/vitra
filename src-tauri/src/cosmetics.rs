@@ -143,15 +143,24 @@ async fn game_token(state: &AppState, identity: &Identity) -> Result<String> {
     Ok(token)
 }
 
-/// Extra JVM arguments that add the Vitra Cosmetics mod to a Fabric instance. Never fails the
-/// launch: without the server the game just starts without our badge.
+/// Extra JVM arguments that add the Vitra Cosmetics mod to a Fabric instance, for badges and capes
+/// and for Memories (where moments happen, biomes, rare mobs). Never fails the launch: without the
+/// server the game just starts without our badge.
 pub async fn launch_args(state: &AppState, inst: &Instance, identity: &Identity) -> Vec<String> {
-    if !state.settings().cosmetics || inst.loader != "fabric" {
+    let settings = state.settings();
+    if !(settings.cosmetics || settings.memories) || inst.loader != "fabric" {
         return vec![];
     }
     let Some(jar) = mod_jar(state, &inst.game_version) else { return vec![] };
     let mut args = vec![format!("-Dfabric.addMods={}", jar.display())];
-    if !identity.demo {
+    // The mod also reports moments for Memories; with badges and capes off it draws nothing and
+    // never goes online.
+    if settings.memories {
+        args.push("-Dvitra.moments=true".into());
+    }
+    if !settings.cosmetics {
+        args.push("-Dvitra.cosmetics.off=true".into());
+    } else if !identity.demo {
         match game_token(state, identity).await {
             Ok(token) => args.push(format!("-Dvitra.cosmetics.token={token}")),
             Err(e) => log::warn!("Vitra badge is off for this session: {e}"),

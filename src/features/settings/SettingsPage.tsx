@@ -280,11 +280,11 @@ function Launcher({ s, update }: SectionProps) {
       </Field>
       <Field
         label="Memories"
-        description="Keeps a picture of big moments while you play, like your first diamonds or beating the Ender Dragon, in every version and modpack. Pictures stay on this PC."
+        description="Keeps a picture of big moments while you play, like your first diamonds or beating the Ender Dragon, in every version and modpack. In Fabric 26.3 instances also where it happened, first visits to rare biomes and rare mobs you spot (Vitra adds its mod for this, which stays offline when badges and capes are off). Pictures stay on this PC."
       >
         <Toggle checked={s.memories} onChange={(v) => update({ memories: v })} />
       </Field>
-      <Field label="Every advancement" description="Also keeps the smaller advancements, not just milestones and challenges.">
+      <Field label="Every advancement" description="Also keeps the smaller advancements (and in Fabric 26.3, every first biome), not just milestones and challenges.">
         <Toggle checked={s.memoriesEveryAdvancement} onChange={(v) => update({ memoriesEveryAdvancement: v })} disabled={!s.memories} />
       </Field>
     </>
