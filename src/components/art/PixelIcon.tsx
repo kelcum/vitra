@@ -1,8 +1,5 @@
 import { memo } from "react";
 
-// Original 8×8 pixel-art icons for instances. Each row is 8 characters; each
-// character maps to a palette color ('.' = transparent).
-
 interface IconDef {
   label: string;
   bg: [string, string];
@@ -97,7 +94,6 @@ function PixelArt({ def }: { def: IconDef }) {
   );
 }
 
-/** Rounded tile with a pixel icon, used for instances everywhere. */
 export const InstanceIcon = memo(function InstanceIcon({ icon, size = 44, radius }: { icon: string; size?: number; radius?: number }) {
   const def = PIXEL_ICONS[icon] ?? PIXEL_ICONS.grass;
   const pad = Math.round(size * 0.18);

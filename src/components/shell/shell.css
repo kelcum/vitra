@@ -6,9 +6,6 @@
   height: 100%;
 }
 
-/* ---------------------------------------------------------------- top bar
-   Three columns so the navigation pill is centered; when the window is tight it moves aside rather
-   than run into the buttons on the right. */
 .topbar {
   display: grid;
   grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
@@ -46,7 +43,6 @@
   background: var(--line-strong);
 }
 
-/* The navigation pill. */
 .topnav {
   display: flex;
   gap: 2px;
@@ -117,7 +113,6 @@
 .topnav-item[aria-current="page"]::before {
   opacity: 0;
 }
-/* The active "drop" that slides between items. */
 .topnav-bubble {
   position: absolute;
   inset: 0;
@@ -142,7 +137,6 @@
     inset 0 0 0 1px rgb(255 255 255 / 0.7),
     0 6px 16px -8px rgb(20 30 60 / 0.35);
 }
-/* Labels show while there is room; tooltips take over when they hide. */
 .topnav-item[data-tip]::after {
   display: none;
 }
@@ -158,7 +152,6 @@
   }
 }
 
-/* Round glass buttons on the right. */
 .orb-btn {
   position: relative;
   flex: none;
@@ -186,7 +179,6 @@
 .orb-btn:hover svg {
   transform: scale(1.1);
 }
-/* The gear turns a little when you point at it. */
 .orb-btn[aria-label="Settings"]:hover svg {
   transform: rotate(75deg) scale(1.05);
 }
@@ -241,7 +233,6 @@
     0 2px 8px -4px rgb(20 30 60 / 0.3);
 }
 
-/* Account avatar. */
 .account-orb {
   position: relative;
   display: grid;
@@ -285,7 +276,6 @@
   padding: 10px 10px 12px;
 }
 
-/* Window controls. */
 .win-controls {
   display: flex;
   gap: 2px;
@@ -314,16 +304,12 @@
   color: #fff;
 }
 
-/* ---------------------------------------------------------------- body */
-/* Pages scroll right up to the window edges: a scroller inset from them would clip the panels'
-   shadows into a visible darker box, and slice content off above the bottom edge. */
 .app-body {
   display: flex;
   padding: 4px 0 0;
   min-height: 0;
 }
 
-/* ---------------------------------------------------------------- tasks */
 .task-row {
   padding: 10px 10px 12px;
   border-radius: var(--r-md);
@@ -345,7 +331,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------------------------------------------------------------- main */
 .main {
   position: relative;
   flex: 1;
@@ -403,7 +388,6 @@
   color: var(--text-2);
 }
 
-/* ---------------------------------------------------------------- toasts */
 .toasts {
   position: fixed;
   right: 20px;
@@ -477,7 +461,6 @@
   overflow: hidden;
 }
 
-/* Update available: a glowing accent pill that is hard to miss. */
 .update-pill {
   display: flex;
   align-items: center;

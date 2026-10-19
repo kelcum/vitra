@@ -1,5 +1,3 @@
-// Mirrors the Rust types serialized over IPC (camelCase).
-
 export type Theme = "dark" | "light" | "system";
 export type Motion = "full" | "reduced" | "off";
 export type Loader = "vanilla" | "fabric" | "quilt" | "forge" | "neoforge";
@@ -26,15 +24,10 @@ export interface Settings {
   reopenOnExit: boolean;
   showNews: boolean;
   checkUpdates: boolean;
-  /** Vitra badges and capes in Fabric instances. */
   cosmetics: boolean;
-  /** Show Vitra and what you're playing on your Discord profile. */
   discordPresence: boolean;
-  /** Name the server you're on in that status. */
   discordShowServer: boolean;
-  /** Keep a picture of big first-time moments. */
   memories: boolean;
-  /** Also keep every other advancement. */
   memoriesEveryAdvancement: boolean;
   notifications: { downloads: boolean; crashes: boolean; gameUpdates: boolean };
   gameDataDir: string | null;
@@ -51,7 +44,6 @@ export interface Settings {
 
 export type MemoryCategory = "treasure" | "nether" | "end" | "boss" | "milestone" | "adventure" | "challenge" | "advancement";
 
-/** A big moment Vitra kept a picture of. */
 export interface Memory {
   id: string;
   at: number;
@@ -59,14 +51,11 @@ export interface Memory {
   instanceName: string;
   gameVersion: string;
   loader: Loader;
-  /** Singleplayer world folder. */
   world: string | null;
-  /** Server name (or address). */
   server: string | null;
   category: MemoryCategory;
   title: string;
   description: string;
-  /** The advancement as the game showed it, and its id when known. */
   advancement: string;
   advancementId: string | null;
   favorite: boolean;
@@ -108,11 +97,9 @@ export interface Instance {
   installedVersion: string | null;
   performancePreset: string | null;
   modpack: ModpackRef | null;
-  /** Source folder when imported from another launcher. */
   importedFrom?: string | null;
 }
 
-/** An instance found in Prism Launcher / MultiMC. */
 export interface ExternalInstance {
   source: string;
   path: string;
@@ -125,14 +112,12 @@ export interface ExternalInstance {
   sizeBytes: number;
   playTimeSecs: number;
   importedAs: string | null;
-  /** Something worth knowing before importing. */
   note: string | null;
   problem: string | null;
 }
 
 export interface InstanceView extends Instance {
   path: string;
-  /** Where the game actually runs (custom folder or the default one). */
   resolvedGameDir: string;
   running: boolean;
 }
@@ -207,7 +192,6 @@ export interface CapeView {
   dataUrl: string | null;
 }
 
-/** A cape from Vitra's cape server: 2:1 cape textures stacked top to bottom, one per frame. */
 export interface VitraCape {
   id: string;
   url: string;
@@ -226,7 +210,6 @@ export interface CapePreset {
 export interface CosmeticsStatus {
   cape: VitraCape | null;
   presets: CapePreset[];
-  /** Players in game on Vitra right now, and everyone who has used it; null when unknown. */
   online: number | null;
   players: number | null;
 }
@@ -239,7 +222,6 @@ export interface ProfileView {
   capes: CapeView[];
 }
 
-/** The picture on an instance's library card. */
 export interface InstanceCover {
   kind: "screenshot" | "world";
   path: string;
@@ -473,7 +455,6 @@ export interface StorageInfo {
   backupsMb: number;
 }
 
-/** A server on the Servers page: featured (curated) or added by the player. */
 export interface ServerEntry {
   id: string;
   name: string;
@@ -484,34 +465,27 @@ export interface ServerEntry {
   hidden: boolean;
 }
 
-/** Live Server List Ping result. */
 export interface ServerStatus {
   latencyMs: number;
   version: string;
   protocol: number;
   playersOnline: number;
   playersMax: number;
-  /** A string with § codes or a chat component. */
   motd: unknown;
   favicon: string | null;
 }
 
 export interface NameChangeInfo {
   allowed: boolean;
-  /** When the name last changed (ms), if it ever did. */
   changedAt: number | null;
-  /** When the next change is allowed (ms), while it isn't yet. */
   nextChangeAt: number | null;
 }
 
 export interface NameCheck {
-  /** "unknown": Mojang didn't answer for that name. */
   results: { name: string; status: "available" | "taken" | "not_allowed" | "invalid" | "unknown" }[];
-  /** Mojang paused answering (rate limit), so the rest weren't checked. */
   limited: boolean;
 }
 
-/** A skin found by player name or link, not yet saved to the library. */
 export interface FoundSkin {
   name: string;
   source: "player" | "link";

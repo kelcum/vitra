@@ -5,7 +5,6 @@ import { setBackdropAccent } from "../../lib/appearance";
 import { useSettings } from "../../lib/store";
 import "./background.css";
 
-/** Deterministic blocky skyline so the art is identical on every launch. */
 function terrainPath(seed: number, width: number, base: number, amp: number, step: number): string {
   let h = base;
   let s = seed;
@@ -50,10 +49,6 @@ function Aurora() {
   );
 }
 
-/**
- * The most vivid color in an image, adjusted to work as an accent. Samples a
- * tiny copy so it costs well under a millisecond.
- */
 function vividColor(img: HTMLImageElement): string | null {
   try {
     const w = 48;
@@ -65,7 +60,6 @@ function vividColor(img: HTMLImageElement): string | null {
     if (!ctx) return null;
     ctx.drawImage(img, 0, 0, w, h);
     const data = ctx.getImageData(0, 0, w, h).data;
-    // Score 24 hue buckets by saturation, ignoring near-greys, blacks and whites.
     const buckets = Array.from({ length: 24 }, () => ({ score: 0, r: 0, g: 0, b: 0, n: 0 }));
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255;
@@ -87,12 +81,10 @@ function vividColor(img: HTMLImageElement): string | null {
     if (best.n < (w * h) / 60) return null;
     return normalizeAccent(best.r / best.n, best.g / best.n, best.b / best.n);
   } catch {
-    // A cross-origin image taints the canvas; keep the default accent.
     return null;
   }
 }
 
-/** Keep the hue, but force a bright, saturated tone that reads well on glass. */
 function normalizeAccent(r: number, g: number, b: number): string {
   r /= 255;
   g /= 255;
@@ -111,7 +103,6 @@ function normalizeAccent(r: number, g: number, b: number): string {
   return "#" + [rr, gg, bb].map((v) => Math.round((v + m) * 255).toString(16).padStart(2, "0")).join("");
 }
 
-/** Liquify-style backdrop: a vivid image blurred into soft color fields. */
 function Liquid({ src }: { src: string | null }) {
   const [loaded, setLoaded] = useState(false);
   useEffect(() => setLoaded(false), [src]);
@@ -181,7 +172,6 @@ export function Background() {
     } else if (kind === "screenshot") {
       api.recentScreenshots(1).then((s) => setScreenshot(s[0] ?? null)).catch(() => setScreenshot(null));
     } else if (kind === "liquid") {
-      // Latest screenshot, else the title panorama, else built-in color fields.
       (async () => {
         const shots = await api.recentScreenshots(1).catch(() => [] as string[]);
         if (shots[0]) return shots[0];
@@ -192,7 +182,6 @@ export function Background() {
     if (kind !== "liquid") setBackdropAccent(null, useSettings.getState().settings);
   }, [kind]);
 
-  // Gentle pointer parallax (skipped when motion is reduced).
   useEffect(() => {
     if (motion !== "full") return;
     let frame = 0;

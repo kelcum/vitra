@@ -1,9 +1,5 @@
 import { useEffect, useRef } from "react";
 
-/**
- * Draws a player's face (base + hat layer) from a skin texture, pixel-perfect.
- * Without a skin it shows a neutral placeholder head.
- */
 export function PlayerHead({ src, size = 28, radius = 7 }: { src?: string | null; size?: number; radius?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -50,7 +46,6 @@ export function PlayerHead({ src, size = 28, radius = 7 }: { src?: string | null
   );
 }
 
-/** Flat front view of a full skin (head, body, arms, legs) for thumbnails. */
 export function SkinFront({ src, slim, height = 96 }: { src: string; slim?: boolean; height?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -72,16 +67,14 @@ export function SkinFront({ src, slim, height = 96 }: { src: string; slim?: bool
           ctx.restore();
         } else ctx.drawImage(img, sx, sy, w, h, dx, dy, w, h);
       };
-      // Base layer
-      d(8, 8, 8, 8, 4, 0); // head
-      d(20, 20, 8, 12, 4, 8); // body
-      d(44, 20, arm, 12, 4 - arm, 8); // right arm (viewer's left)
+      d(8, 8, 8, 8, 4, 0);
+      d(20, 20, 8, 12, 4, 8);
+      d(44, 20, arm, 12, 4 - arm, 8);
       if (legacy) d(44, 20, arm, 12, 12, 8, true);
-      else d(36, 52, arm, 12, 12, 8); // left arm
-      d(4, 20, 4, 12, 4, 20); // right leg
+      else d(36, 52, arm, 12, 12, 8);
+      d(4, 20, 4, 12, 4, 20);
       if (legacy) d(4, 20, 4, 12, 8, 20, true);
-      else d(20, 52, 4, 12, 8, 20); // left leg
-      // Overlay layer
+      else d(20, 52, 4, 12, 8, 20);
       d(40, 8, 8, 8, 4, 0);
       if (!legacy) {
         d(20, 36, 8, 12, 4, 8);

@@ -1,4 +1,3 @@
-/* ================================================================ Button */
 .btn {
   --btn-h: 36px;
   --btn-px: 14px;
@@ -26,7 +25,6 @@
     opacity var(--d-1) ease;
   isolation: isolate;
 }
-/* A band of light sweeps across on hover, like a reflection on glass. */
 .btn::before {
   content: "";
   position: absolute;
@@ -179,7 +177,6 @@
   height: 15px;
 }
 
-/* Tooltips for icon buttons */
 [data-tip] {
   position: relative;
 }
@@ -224,7 +221,6 @@
   transform: translate(0, -50%);
 }
 
-/* ================================================================ Inputs */
 .field-input {
   display: flex;
   align-items: center;
@@ -290,7 +286,6 @@ textarea.textarea:focus {
   box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.18);
 }
 
-/* ================================================================ Toggle */
 .toggle {
   position: relative;
   width: 40px;
@@ -317,9 +312,6 @@ textarea.textarea:focus {
     inset 0 -1px 0 rgb(0 0 0 / 0.08);
   transition: transform var(--d-2) var(--ease-spring);
 }
-/* A deeper, quieter accent than buttons get: long lists of switches stay calm, and bright accent is
-   left for each page's main button. Mixed with the panel tint, not see-through, so the backdrop
-   can't muddy it. */
 .toggle[aria-checked="true"] {
   background: color-mix(in oklab, var(--accent) 58%, rgb(var(--tint)));
   border-color: rgb(var(--accent-rgb) / 0.55);
@@ -337,7 +329,6 @@ textarea.textarea:focus {
   opacity: 0.45;
 }
 
-/* ================================================================ Slider */
 .slider {
   --pct: 50%;
   position: relative;
@@ -406,7 +397,6 @@ textarea.textarea:focus {
   color: var(--text-1);
 }
 
-/* ================================================================ Segmented */
 .segmented {
   position: relative;
   display: inline-flex;
@@ -455,7 +445,6 @@ textarea.textarea:focus {
   background: #fff;
 }
 
-/* ================================================================ Tabs */
 .tabs {
   display: flex;
   gap: 4px;
@@ -505,7 +494,6 @@ textarea.textarea:focus {
   box-shadow: 0 0 12px rgb(var(--accent-rgb) / 0.7);
 }
 
-/* ================================================================ Select */
 .select-trigger {
   display: flex;
   align-items: center;
@@ -608,7 +596,6 @@ textarea.textarea:focus {
   color: var(--accent-text) !important;
 }
 
-/* ================================================================ Progress */
 .progress {
   position: relative;
   height: 6px;
@@ -654,7 +641,6 @@ textarea.textarea:focus {
   flex: none;
 }
 
-/* ================================================================ Skeleton */
 .skeleton {
   position: relative;
   overflow: hidden;
@@ -669,7 +655,6 @@ textarea.textarea:focus {
   animation: shimmer 1.4s var(--ease-in-out) infinite;
 }
 
-/* ================================================================ Chips */
 .chip {
   display: inline-flex;
   align-items: center;
@@ -724,7 +709,6 @@ button.chip[aria-pressed="true"] {
   border-color: rgb(var(--accent-rgb) / 0.3);
 }
 
-/* ================================================================ Modal */
 .modal-scrim {
   position: fixed;
   inset: 0;
@@ -802,7 +786,6 @@ button.chip[aria-pressed="true"] {
   color: var(--warning);
 }
 
-/* ================================================================ Field rows */
 .field {
   display: flex;
   align-items: center;
@@ -843,7 +826,6 @@ button.chip[aria-pressed="true"] {
   flex: 1;
 }
 
-/* ================================================================ Empty */
 .empty {
   display: flex;
   flex-direction: column;
@@ -879,7 +861,6 @@ button.chip[aria-pressed="true"] {
   max-width: 380px;
 }
 
-/* ================================================================ Notice */
 .notice {
   display: flex;
   gap: 10px;
@@ -931,7 +912,6 @@ kbd {
   background: var(--fill-1);
 }
 
-/* Quiet buttons skip the sweep; they only fade in a fill. */
 .btn--ghost::before {
   display: none;
 }

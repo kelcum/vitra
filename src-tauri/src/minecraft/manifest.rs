@@ -1,6 +1,3 @@
-//! Mojang version manifest and version JSON model, rule evaluation and the
-//! `inheritsFrom` merge used by mod loaders.
-
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
@@ -146,7 +143,6 @@ pub struct Library {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub downloads: Option<LibraryDownloads>,
-    /// Maven repository base (Fabric/Quilt style libraries).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -200,7 +196,6 @@ pub struct OsRule {
     pub version: Option<String>,
 }
 
-/// Feature flags used by conditional arguments.
 #[derive(Debug, Clone, Default)]
 pub struct Features {
     pub is_demo_user: bool,
@@ -235,13 +230,9 @@ fn os_rule_matches(os: &OsRule) -> bool {
             return false;
         }
     }
-    // `version` regexes only target ancient Windows/macOS releases; every
-    // supported OS satisfies them, so they are treated as matching.
     true
 }
 
-/// Mojang rule semantics: disallowed by default when rules exist; the last
-/// matching rule wins.
 pub fn rules_allow(rules: &Option<Vec<Rule>>, features: &Features) -> bool {
     let Some(rules) = rules else { return true };
     if rules.is_empty() {
@@ -268,7 +259,6 @@ impl Library {
         rules_allow(&self.rules, &Features::default())
     }
 
-    /// Classifier for old-style native libraries on this OS, e.g. `natives-windows`.
     pub fn native_classifier(&self) -> Option<String> {
         let natives = self.natives.as_ref()?;
         let key = match util::os_name() {
@@ -279,15 +269,12 @@ impl Library {
         Some(key.replace("${arch}", arch))
     }
 
-    /// The main artifact: (relative path, url, sha1, size). Libraries without
-    /// a URL (produced locally by Forge installers) return an empty URL.
     pub fn artifact(&self) -> Option<(String, String, Option<String>, Option<u64>)> {
         if let Some(dl) = &self.downloads {
             if let Some(a) = &dl.artifact {
                 let path = a.path.clone().or_else(|| util::maven_path(&self.name))?;
                 return Some((path, a.url.clone(), a.sha1.clone(), a.size));
             }
-            // Old natives-only entries have classifiers but no artifact.
             if dl.classifiers.is_some() && self.natives.is_some() {
                 return None;
             }
@@ -310,19 +297,14 @@ impl Library {
 }
 
 impl VersionJson {
-    /// Merges a loader profile (`self`, which `inheritsFrom` the parent) onto
-    /// its parent. Loader libraries win on conflicts.
     pub fn merge_onto(self, parent: VersionJson) -> VersionJson {
         let mut seen = HashSet::new();
         let mut libraries = Vec::new();
         for lib in self.libraries.into_iter().chain(parent.libraries) {
-            // Rules first: some versions list a library once per OS (LWJGL on 1.14–1.18), and the copy
-            // for another OS mustn't win the de-duplication below.
             if !lib.is_allowed() {
                 continue;
             }
             let key = util::maven_key(&lib.name);
-            // Keep natives of the same artifact distinct from the main jar.
             let key = if lib.natives.is_some() { format!("{key}#natives") } else { key };
             if seen.insert(key) {
                 libraries.push(lib);
@@ -366,8 +348,6 @@ impl VersionJson {
             .unwrap_or(false)
     }
 
-    /// The Java major version this version needs. Versions from before Mojang
-    /// started declaring it all run on Java 8.
     pub fn java_major(&self) -> u32 {
         self.java_version.as_ref().map(|j| j.major_version).unwrap_or(8)
     }
@@ -380,7 +360,6 @@ impl VersionJson {
     }
 }
 
-/// Expands `${placeholders}` in a single argument.
 pub fn substitute(arg: &str, vars: &HashMap<&str, String>) -> String {
     let mut out = String::with_capacity(arg.len());
     let mut rest = arg;

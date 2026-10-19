@@ -418,7 +418,6 @@ function Storage({ s, update }: SectionProps) {
   const total = rows.reduce((a, [, v]) => a + (v as number), 0);
   const changeDir = (dir: string | null) => {
     update({ gameDataDir: dir });
-    // Settings save is debounced; reload instances from the new location after it lands.
     window.setTimeout(() => useInstances.getState().refresh(), 700);
   };
   return (
@@ -697,7 +696,6 @@ function About() {
   );
 }
 
-/** Deletes what Vitra's cosmetics server keeps about the signed-in player. */
 function VitraDataField() {
   const account = useActiveAccount();
   const [confirming, setConfirming] = useState(false);

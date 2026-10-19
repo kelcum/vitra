@@ -14,8 +14,6 @@ import type { ServerEntry, ServerStatus } from "../../lib/types";
 import { Motd, plainText } from "./Motd";
 import "./servers.css";
 
-// ------------------------------------------------------------------ status
-
 type Ping = { status: ServerStatus | null; error: string | null; at: number };
 const PING_TTL = 60_000;
 const pingCache = new Map<string, Ping>();
@@ -28,7 +26,6 @@ function usePings(addresses: string[]) {
     setTick((t) => t + 1);
     await Promise.all(
       todo.map(async (a) => {
-        // One quiet retry: busy networks occasionally drop a status request.
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
             pingCache.set(a, { status: await api.pingServer(a), error: null, at: Date.now() });
@@ -71,8 +68,6 @@ function Favicon({ ping, name, size }: { ping?: Ping; name: string; size: number
   );
 }
 
-// ------------------------------------------------------------------ page
-
 export default function Servers() {
   const [servers, setServers] = useState<ServerEntry[] | null>(null);
   const [category, setCategory] = useState("All");
@@ -101,8 +96,6 @@ export default function Servers() {
     if (!categories.includes(category)) setCategory("All");
   }, [categories, category]);
 
-  // The hero is whichever featured server has the most players right now.
-  // It's only chosen once every ping is back, so it never flips while loading.
   const hero = useMemo(() => {
     const featured = visible.filter((s) => s.featured);
     if (featured.some((s) => !pings.get(s.address))) return featured[0] ?? null;
@@ -282,8 +275,6 @@ export default function Servers() {
   );
 }
 
-// ------------------------------------------------------------------ hero
-
 function Hero({ server, ping, onJoin, actions }: { server: ServerEntry; ping?: Ping; onJoin: () => void; actions: MenuItem[] }) {
   const s = ping?.status;
   return (
@@ -328,8 +319,6 @@ function Hero({ server, ping, onJoin, actions }: { server: ServerEntry; ping?: P
     </motion.div>
   );
 }
-
-// ------------------------------------------------------------------ cards
 
 function Grid({
   servers,
@@ -408,8 +397,6 @@ function ServerCard({ server, ping, onJoin, actions }: { server: ServerEntry; pi
   );
 }
 
-// ------------------------------------------------------------------ add / edit
-
 function ServerDialog({ server, onClose, onSaved }: { server: ServerEntry | "new" | null; onClose: () => void; onSaved: () => void }) {
   const editing = server && server !== "new" ? server : null;
   const [name, setName] = useState("");
@@ -426,7 +413,6 @@ function ServerDialog({ server, onClose, onSaved }: { server: ServerEntry | "new
     setPreview(null);
   }, [server]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Live check while typing, so you know the address works before saving.
   useEffect(() => {
     const a = address.trim();
     setPreview(null);

@@ -1,9 +1,6 @@
-// Vitra site: scroll reveals, the hero screenshot settling flat as you
-// scroll, and the screen tour. Everything degrades to a static page.
 (() => {
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // Reveal sections as they enter the viewport.
   const items = document.querySelectorAll(".reveal");
   if (reduced || !("IntersectionObserver" in window)) {
     items.forEach((el) => el.classList.add("in"));
@@ -15,7 +12,6 @@
     items.forEach((el) => io.observe(el));
   }
 
-  // Hero: tilted back at the top, flat by the time it's in full view.
   const frame = document.querySelector(".hero-shot .frame");
   if (frame && !reduced) {
     let ticking = false;
@@ -29,7 +25,6 @@
     update();
   }
 
-  // Tour: tabs switch screenshots; auto-advances until someone picks a tab.
   const tabs = [...document.querySelectorAll(".tour-tabs button")];
   const slides = [...document.querySelectorAll(".tour-stage img")];
   const caption = document.querySelector(".tour-caption");
@@ -56,7 +51,6 @@
   });
   show(0);
   if (!reduced) {
-    // Only cycle while the tour is on screen.
     const stage = document.querySelector(".tour-stage");
     let visible = false;
     new IntersectionObserver(([e]) => (visible = e.isIntersecting)).observe(stage);

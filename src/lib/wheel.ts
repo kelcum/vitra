@@ -1,10 +1,5 @@
 import { useCallback, useRef } from "react";
 
-/**
- * Lets the mouse wheel scroll a horizontal row. The page keeps scrolling as usual once the row
- * reaches its end, so a row never traps the wheel. Returns a callback ref, so it also works on rows
- * that appear later.
- */
 export function useWheelScrollX<T extends HTMLElement>() {
   const detach = useRef<(() => void) | null>(null);
   return useCallback((el: T | null) => {

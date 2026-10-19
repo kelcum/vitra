@@ -1,12 +1,10 @@
 import type { Loader } from "./types";
 
-/** Well-known, widely used optimization mods (Modrinth slugs). */
 export interface PerfMod {
   slug: string;
   title: string;
   why: string;
   loaders: Loader[];
-  /** Included in the "Maximum FPS" preset. */
   core: boolean;
 }
 
@@ -76,7 +74,6 @@ export interface GraphicsPreset {
   title: string;
   description: string;
   jvmPreset: string;
-  /** options.txt values. Keys unknown to older versions are ignored by the game. */
   options: Record<string, string>;
   mods: "core" | "all" | "none";
 }

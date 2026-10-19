@@ -1,10 +1,3 @@
-//! Installed content (mods, resource packs, shader packs) for an instance.
-//!
-//! Each instance keeps `content.json`, an index of what each file is
-//! (Modrinth project/version, hashes, title, icon). Files added by hand are
-//! identified by hash through Modrinth, or by reading their mod metadata.
-//! Removing content moves it to the instance's `.trash` so it can be restored.
-
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -67,7 +60,6 @@ pub struct ContentEntry {
     pub size: u64,
     pub url: Option<String>,
     pub project_type: String,
-    /// "modrinth" or "local".
     pub source: String,
     pub installed_at: i64,
 }
@@ -147,7 +139,6 @@ fn scan_folder(game_dir: &Path, folder: &str) -> Vec<FoundFile> {
     out
 }
 
-/// Reads display name, version and icon from a mod jar's metadata.
 fn local_mod_metadata(state: &AppState, path: &Path, sha1: &str) -> (Option<String>, Option<String>, Option<String>) {
     let Ok(file) = std::fs::File::open(path) else { return (None, None, None) };
     let Ok(mut zip) = zip::ZipArchive::new(file) else { return (None, None, None) };
@@ -201,13 +192,11 @@ fn local_mod_metadata(state: &AppState, path: &Path, sha1: &str) -> (Option<Stri
     (name, version, icon)
 }
 
-/// Brings the index in line with the folder and identifies new files.
 pub async fn refresh(state: &AppState, inst: &Instance, folder: &str) -> Result<Vec<ContentItem>> {
     let game_dir = instances::game_dir(state, inst);
     let found = scan_folder(&game_dir, folder);
     let mut index = load_index(state, &inst.id);
 
-    // Hash files the index doesn't know (or whose size changed).
     let mut unknown: Vec<(String, PathBuf, u64)> = Vec::new();
     for f in &found {
         let known = index.get(&f.key).map(|e| e.size == f.size).unwrap_or(false);
@@ -285,7 +274,6 @@ pub async fn refresh(state: &AppState, inst: &Instance, folder: &str) -> Result<
         }
     }
 
-    // Forget entries whose files are gone (other folders untouched).
     let present: HashSet<&String> = found.iter().map(|f| &f.key).collect();
     index.retain(|k, _| !k.starts_with(&format!("{folder}/")) || present.contains(k));
     save_index(state, &inst.id, &index)?;
@@ -450,8 +438,6 @@ pub fn empty_trash(state: State<'_, Arc<AppState>>, id: String) -> Result<()> {
     Ok(())
 }
 
-// ---------------------------------------------------------------- install plans
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlannedFile {
@@ -466,7 +452,6 @@ pub struct PlannedFile {
     pub sha512: Option<String>,
     pub size: u64,
     pub project_type: String,
-    /// "requested", "dependency" or "update".
     pub reason: String,
     pub required_by: Option<String>,
     pub replaces: Option<String>,
@@ -478,9 +463,7 @@ pub struct InstallPlan {
     pub instance_id: String,
     pub files: Vec<PlannedFile>,
     pub warnings: Vec<String>,
-    /// Problems the user must acknowledge before installing.
     pub conflicts: Vec<String>,
-    /// Requested items that won't be installed, with the reason.
     pub skipped: Vec<String>,
 }
 
@@ -544,7 +527,6 @@ pub async fn plan(state: &AppState, inst: &Instance, requests: Vec<PlanRequest>)
             None => {
                 let strict = modrinth::project_versions(state, &req.project_id, Some(&loaders), Some(&game)).await?;
                 if strict.is_empty() && req.project_type != "mod" {
-                    // Packs often work across versions; fall back with a warning.
                     let any = modrinth::project_versions(state, &req.project_id, None, None).await?;
                     let picked = pick_version(any);
                     if picked.is_some() {
@@ -564,7 +546,6 @@ pub async fn plan(state: &AppState, inst: &Instance, requests: Vec<PlanRequest>)
             }
             continue;
         };
-        // Requests may use slugs while dependencies use ids: de-duplicate on the real id.
         if plan.files.iter().any(|f| f.project_id == version.project_id) {
             continue;
         }
@@ -638,7 +619,6 @@ pub async fn plan(state: &AppState, inst: &Instance, requests: Vec<PlanRequest>)
         });
     }
 
-    // Fill in titles/icons in one request.
     let ids: Vec<String> = plan.files.iter().map(|f| f.project_id.clone()).collect();
     let mut titles: HashMap<String, String> = HashMap::new();
     if let Ok(projects) = modrinth::projects(state, &ids).await {
@@ -658,7 +638,6 @@ pub async fn plan(state: &AppState, inst: &Instance, requests: Vec<PlanRequest>)
         }
     }
 
-    // Incompatibilities against what's installed or being installed.
     for (who, other) in incompatible {
         let hit = installed.get(&other).map(|(_, e)| e.title.clone()).or_else(|| {
             plan.files.iter().find(|f| f.project_id == other).map(|f| f.title.clone())
@@ -813,7 +792,6 @@ pub async fn check_updates(state: State<'_, Arc<AppState>>, id: String, project_
     Ok(out)
 }
 
-/// Copies local files (drag & drop / file picker) into the right folder.
 #[tauri::command]
 pub fn import_content_files(state: State<'_, Arc<AppState>>, id: String, project_type: String, paths: Vec<String>) -> Result<usize> {
     let inst = instances::load(&state, &id)?;

@@ -1,8 +1,3 @@
-//! Long-running jobs (installs, downloads, backups) report progress through a
-//! `TaskHandle`. Counters are atomics so download workers can update them
-//! without locking; a single ticker per task emits throttled snapshots to the
-//! UI so a 4,000-file asset download doesn't flood the IPC channel.
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -21,7 +16,6 @@ pub struct TaskSnapshot {
     pub title: String,
     pub stage: String,
     pub instance_id: Option<String>,
-    /// 0..1, or `None` when progress genuinely can't be measured.
     pub progress: Option<f64>,
     pub files_done: u64,
     pub files_total: u64,
@@ -106,8 +100,6 @@ impl TaskHandle {
         &self.inner.id
     }
 
-    /// Starts a new stage. `measurable` = whether the stage can report honest
-    /// progress; when false the UI shows an indeterminate animation.
     pub fn stage(&self, stage: impl Into<String>, measurable: bool) {
         *self.inner.stage.lock().unwrap() = stage.into();
         self.inner.measurable.store(measurable, Ordering::Relaxed);
@@ -135,7 +127,6 @@ impl TaskHandle {
         self.inner.dirty.store(true, Ordering::Relaxed);
     }
 
-    /// Undo bytes counted for an attempt that failed and will be retried.
     pub fn sub_bytes(&self, n: u64) {
         let counter = &self.inner.bytes_done;
         let mut current = counter.load(Ordering::Relaxed);
@@ -165,7 +156,6 @@ impl TaskHandle {
         self.emit_now();
     }
 
-    /// Records the outcome of `result` on the task and passes it through.
     pub fn complete<T>(&self, result: Result<T>) -> Result<T> {
         match &result {
             Ok(_) => self.finish(),
@@ -212,7 +202,6 @@ impl Tasks {
         let handle = TaskHandle { inner: inner.clone(), app: self.app.clone() };
         handle.emit_now();
 
-        // Ticker: emits at most ~7 times/sec and computes a smoothed speed.
         let ticker = handle.clone();
         tauri::async_runtime::spawn(async move {
             let mut last_bytes = 0u64;
@@ -248,7 +237,6 @@ impl Tasks {
 
     pub fn list(&self) -> Vec<TaskSnapshot> {
         let mut map = self.map.lock().unwrap();
-        // Forget finished tasks older than 10 minutes so the map can't grow forever.
         let cutoff = crate::util::now_millis() - 10 * 60 * 1000;
         map.retain(|_, t| t.state.lock().unwrap().0 == "running" || t.started_at > cutoff);
         let mut v: Vec<_> = map.values().map(|t| t.snapshot()).collect();

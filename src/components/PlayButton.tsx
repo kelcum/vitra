@@ -18,7 +18,6 @@ function useElapsed(since: number | undefined) {
   return since ? Math.max(0, (now - since) / 1000) : 0;
 }
 
-/** The one Play button: shows install/launch progress and turns into Stop while running. */
 export function PlayButton({ instance, size = "lg" }: { instance: InstanceView; size?: "lg" | "md" | "sm" }) {
   const tasks = useTasks((s) => s.tasks);
   const runningInfo = useInstances((s) => s.running[instance.id]);

@@ -8,7 +8,6 @@ import { play } from "../../lib/launch";
 import { toast } from "../../lib/store";
 import type { InstanceView, WorldInfo } from "../../lib/types";
 
-/** Quick Play (joining a world directly) exists since Minecraft 1.20. */
 function supportsQuickPlay(version: string): boolean {
   const parts = version.split(".").map((p) => parseInt(p, 10));
   if (parts[0] >= 25) return true;

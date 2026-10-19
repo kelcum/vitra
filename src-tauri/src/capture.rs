@@ -1,20 +1,9 @@
-//! Takes a picture of a running game's window for Memories.
-//!
-//! On Windows this uses Windows Graphics Capture: the compositor hands over one frame of the window,
-//! so nothing runs inside the game and it never waits on Vitra. The picture is cropped to the
-//! window's client area (no title bar) and returned as BGRA pixels. Elsewhere there is no capture
-//! yet and memories are saved without a picture.
-
-/// One captured frame: `width × height` BGRA pixels, rows packed.
 pub struct Frame {
     pub width: u32,
     pub height: u32,
     pub bgra: Vec<u8>,
 }
 
-/// Captures the largest visible window of process `pid`. `None` when there's no such window, it's
-/// minimized, or the system can't capture it. Blocking (up to about 1.5 s): call it off the async
-/// runtime.
 pub fn window_of_process(pid: u32) -> Option<Frame> {
     #[cfg(windows)]
     {
@@ -27,7 +16,6 @@ pub fn window_of_process(pid: u32) -> Option<Frame> {
     }
 }
 
-/// Box-filter downscale so the longer side is at most `max_side`; smaller frames come back as is.
 pub fn shrink(frame: &Frame, max_side: u32) -> Frame {
     let (w, h) = (frame.width, frame.height);
     let longest = w.max(h);
@@ -63,7 +51,6 @@ pub fn shrink(frame: &Frame, max_side: u32) -> Frame {
     Frame { width: nw, height: nh, bgra: out }
 }
 
-/// JPEG bytes of a frame.
 pub fn jpeg(frame: &Frame, quality: u8) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     let encoder = jpeg_encoder::Encoder::new(&mut out, quality);
@@ -99,7 +86,6 @@ mod imp {
 
     use super::Frame;
 
-    /// How long to wait for the compositor's first frame.
     const FRAME_WAIT: Duration = Duration::from_millis(1500);
 
     struct Search {
@@ -109,7 +95,6 @@ mod imp {
     }
 
     unsafe extern "system" fn visit(hwnd: HWND, data: LPARAM) -> BOOL {
-        // SAFETY: `data` is the `Search` that `find_window` passes in and outlives the enumeration.
         let search = unsafe { &mut *(data.0 as *mut Search) };
         let mut pid = 0u32;
         unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
@@ -134,7 +119,6 @@ mod imp {
     }
 
     pub fn capture(pid: u32) -> Option<Frame> {
-        // Tokio's blocking threads are reused: a second call just reports "already initialized".
         let _ = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
         let hwnd = find_window(pid)?;
         if unsafe { IsIconic(hwnd) }.as_bool() {
@@ -149,8 +133,6 @@ mod imp {
         }
     }
 
-    /// The client area's position and size inside the captured image (which covers the window's
-    /// visible frame).
     fn client_area(hwnd: HWND, width: u32, height: u32) -> (u32, u32, u32, u32) {
         let mut frame = RECT::default();
         let mut client = RECT::default();
@@ -196,7 +178,6 @@ mod imp {
         let item: GraphicsCaptureItem = unsafe { interop.CreateForWindow(hwnd)? };
         let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&d3d, DirectXPixelFormat::B8G8R8A8UIntNormalized, 1, item.Size()?)?;
         let session = pool.CreateCaptureSession(&item)?;
-        // Neither is available on every Windows 10 build; the capture works without them.
         let _ = session.SetIsCursorCaptureEnabled(false);
         let _ = session.SetIsBorderRequired(false);
         session.StartCapture()?;
@@ -235,15 +216,12 @@ mod imp {
                 unsafe { context.Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))? };
                 let mut bgra = Vec::with_capacity((cw * ch * 4) as usize);
                 for row in cy..cy + ch {
-                    // SAFETY: the mapped texture holds `desc.Height` rows of `RowPitch` bytes, and the
-                    // crop stays inside `desc.Width × desc.Height`.
                     let line = unsafe {
                         std::slice::from_raw_parts((mapped.pData as *const u8).add(row as usize * mapped.RowPitch as usize + cx as usize * 4), cw as usize * 4)
                     };
                     bgra.extend_from_slice(line);
                 }
                 unsafe { context.Unmap(&staging, 0) };
-                // The game draws with alpha in its framebuffer; the picture is opaque.
                 for alpha in bgra.iter_mut().skip(3).step_by(4) {
                     *alpha = 255;
                 }
@@ -262,7 +240,6 @@ mod tests {
 
     #[test]
     fn shrinks_and_encodes() {
-        // 4×2: left half white, right half black.
         let mut bgra = Vec::new();
         for _ in 0..2 {
             for x in 0..4 {

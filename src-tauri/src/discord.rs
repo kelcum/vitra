@@ -1,7 +1,3 @@
-//! A small Discord Rich Presence client over Discord's local IPC: a named pipe on Windows, a Unix
-//! socket elsewhere. It talks to the Discord app already running on the player's computer, so there
-//! is nothing to install. Frames are `[opcode u32 LE][length u32 LE][JSON]`.
-
 use std::io;
 use std::time::Duration;
 
@@ -13,9 +9,7 @@ const FRAME: u32 = 1;
 const CLOSE: u32 = 2;
 const PING: u32 = 3;
 const PONG: u32 = 4;
-/// Discord answers within milliseconds; a stuck pipe mustn't hold Vitra up.
 const TIMEOUT: Duration = Duration::from_secs(5);
-/// Replies are small; anything bigger is a broken stream.
 const MAX_FRAME: usize = 1 << 20;
 
 #[cfg(windows)]
@@ -27,7 +21,6 @@ pub struct Client {
     pipe: Pipe,
 }
 
-/// Discord listens on the first free of `discord-ipc-0` … `discord-ipc-9`.
 #[cfg(windows)]
 async fn open(index: u8) -> io::Result<Pipe> {
     tokio::net::windows::named_pipe::ClientOptions::new().open(format!(r"\\.\pipe\discord-ipc-{index}"))
@@ -41,7 +34,6 @@ async fn open(index: u8) -> io::Result<Pipe> {
         .chain(std::iter::once("/tmp".to_string()));
     let mut last = io::Error::from(io::ErrorKind::NotFound);
     for dir in dirs {
-        // Flatpak and Snap builds of Discord keep the socket in a subfolder.
         for sub in ["", "app/com.discordapp.Discord/", "snap.discord/"] {
             match tokio::net::UnixStream::connect(format!("{dir}/{sub}discord-ipc-{index}")).await {
                 Ok(s) => return Ok(s),
@@ -53,8 +45,6 @@ async fn open(index: u8) -> io::Result<Pipe> {
 }
 
 impl Client {
-    /// Connects to the running Discord app as the application `app_id`. Fails quickly when
-    /// Discord isn't running.
     pub async fn connect(app_id: &str) -> io::Result<Self> {
         let mut last = io::Error::new(io::ErrorKind::NotFound, "Discord isn't running");
         for index in 0..10 {
@@ -75,7 +65,6 @@ impl Client {
         Err(last)
     }
 
-    /// Shows `activity` on the player's profile, or clears it with `None`.
     pub async fn set_activity(&mut self, activity: Option<&Value>) -> io::Result<()> {
         let nonce = uuid::Uuid::new_v4().to_string();
         let args = json!({ "pid": std::process::id(), "activity": activity });
@@ -150,8 +139,6 @@ mod tests {
         assert_eq!(body["cmd"], "SET_ACTIVITY");
     }
 
-    /// Talks to the Discord app on this computer: `cargo test discord -- --ignored --nocapture`.
-    /// Set VITRA_DISCORD_ID to an application ID to also show a test status for a few seconds.
     #[tokio::test]
     #[ignore]
     async fn live_discord() {

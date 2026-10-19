@@ -1,9 +1,3 @@
-//! Vitra launcher backend.
-//!
-//! The UI (React, in `../src`) only talks to this crate through the commands
-//! registered below and the events they emit. All filesystem, network and
-//! process work happens here, asynchronously, so the interface never blocks.
-
 mod auth;
 mod capture;
 mod content;
@@ -35,8 +29,6 @@ use tauri::Manager;
 
 use crate::state::AppState;
 
-/// Lets the asset protocol serve files from wherever game data lives
-/// (screenshots, pack icons, world icons, panorama).
 pub(crate) fn allow_asset_dirs(state: &AppState) {
     let scope = state.app.asset_protocol_scope();
     let _ = scope.allow_directory(&state.root, true);
@@ -70,14 +62,11 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // settings
             settings::get_settings,
             settings::save_settings,
             settings::reset_settings,
-            // tasks
             tasks::list_tasks,
             tasks::cancel_task,
-            // instances
             instances::list_instances,
             instances::get_instance,
             instances::create_instance,
@@ -91,14 +80,12 @@ pub fn run() {
             instances::instance_covers,
             importer::find_external_instances,
             importer::import_external_instance,
-            // servers
             servers::list_servers,
             servers::add_server,
             servers::edit_server,
             servers::remove_server,
             servers::set_server_hidden,
             servers::ping_server,
-            // versions, loaders, install, launch
             minecraft::install::list_game_versions,
             minecraft::install::latest_release,
             minecraft::install::install_instance_cmd,
@@ -108,23 +95,19 @@ pub fn run() {
             minecraft::launch::stop_instance,
             minecraft::launch::running_instances,
             minecraft::launch::inject_game_log,
-            // memories
             memories::list_memories,
             memories::set_memory_favorite,
             memories::delete_memory,
             memories::reveal_memory,
-            // java
             java::list_java,
             java::inspect_java,
             java::install_java_runtime,
-            // accounts
             auth::list_accounts,
             auth::set_active_account,
             auth::remove_account,
             auth::begin_sign_in,
             auth::cancel_sign_in,
             auth::check_active_account,
-            // skins
             skins::list_skins,
             skins::import_skin,
             skins::update_skin,
@@ -145,7 +128,6 @@ pub fn run() {
             cosmetics::cosmetics_status,
             cosmetics::set_vitra_cape,
             cosmetics::delete_vitra_data,
-            // modrinth & content
             modrinth::modrinth_search,
             modrinth::modrinth_project,
             modrinth::modrinth_versions,
@@ -160,18 +142,15 @@ pub fn run() {
             content::apply_plan,
             content::check_updates,
             content::import_content_files,
-            // packs & options
             packs::get_game_options,
             packs::set_game_options,
             packs::list_resource_packs,
             packs::set_resource_packs,
             packs::shader_state,
             packs::set_active_shader,
-            // modpacks
             modpack::import_modpack_file,
             modpack::install_modpack,
             modpack::export_modpack,
-            // system
             system::system_info,
             system::patch_notes,
             system::patch_note_body,

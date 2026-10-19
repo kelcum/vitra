@@ -13,8 +13,6 @@ import { createPortal } from "react-dom";
 import { cx } from "../../lib/format";
 import { IconButton } from "./Button";
 
-// ------------------------------------------------------------------ Modal
-
 interface ModalProps {
   open: boolean;
   onClose: () => void;
@@ -48,7 +46,6 @@ export function Modal({
       if (e.key === "Escape" && dismissable) onClose();
     };
     window.addEventListener("keydown", onKey);
-    // Move focus into the dialog for keyboard users.
     const t = window.setTimeout(() => {
       const el = ref.current?.querySelector<HTMLElement>("[data-autofocus], input, button:not([data-modal-close])");
       el?.focus();
@@ -105,8 +102,6 @@ export function Modal({
     document.body,
   );
 }
-
-// ------------------------------------------------------------------ Popover
 
 interface PopoverProps {
   anchor: RefObject<HTMLElement | null>;
@@ -187,8 +182,6 @@ export function Popover({ anchor, open, onClose, align = "start", width, classNa
   );
 }
 
-// ------------------------------------------------------------------ Menu
-
 export interface MenuItem {
   label: string;
   icon?: ReactNode;
@@ -233,8 +226,6 @@ export function Menu({
     </>
   );
 }
-
-// ------------------------------------------------------------------ Confirm
 
 export function ConfirmDialog({
   open,

@@ -27,8 +27,6 @@ export default function Library() {
   const [importing, setImporting] = useState(false);
   const [covers, setCovers] = useState<Record<string, InstanceCover>>({});
 
-  // Covers only change when instances come or go, or after playing (new screenshots), not on every
-  // refresh of the list.
   const coverKey = instances.map((i) => `${i.id}:${i.lastPlayed ?? 0}:${i.gameDir ?? ""}`).join("|");
   useEffect(() => {
     let live = true;
@@ -224,7 +222,6 @@ function InstanceCard({
           navigate("instance", { id: instance.id });
         }}
       >
-        {/* Its newest screenshot, else its latest world's icon blurred into a backdrop. */}
         <div className="instance-cover">
           {cover ? (
             <img src={fileSrc(cover.path)} alt="" loading="lazy" decoding="async" className={`instance-cover-img instance-cover-img--${cover.kind}`} />

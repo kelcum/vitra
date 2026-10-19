@@ -10,7 +10,6 @@ import { onSystemAppearanceChange, applyAppearance, resolvedMotion } from "./lib
 import { useNav, useSettings } from "./lib/store";
 import { startUpdateChecks } from "./lib/updater";
 
-// Heavier pages load on first visit so startup stays fast.
 const Library = lazy(() => import("./features/library/Library"));
 const InstancePage = lazy(() => import("./features/instance/InstancePage"));
 const Memories = lazy(() => import("./features/memories/Memories"));
@@ -76,7 +75,6 @@ export function App() {
       const s = useSettings.getState().settings;
       if (s) applyAppearance(s);
     });
-    // Mouse back button / Alt+Left navigate back.
     const onKey = (e: KeyboardEvent) => {
       if (e.altKey && e.key === "ArrowLeft") useNav.getState().back();
     };
@@ -85,7 +83,6 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("mouseup", onMouse);
-    // Block the browser context menu outside inputs — this is an app, not a page.
     const onContext = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
       if (!t.closest("input, textarea, .selectable")) e.preventDefault();

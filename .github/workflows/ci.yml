@@ -1,5 +1,3 @@
-# Checks every pull request (and main) on Windows, the platform Vitra ships for:
-# TypeScript, a frontend build, the Rust tests and clippy.
 name: CI
 
 on:
@@ -24,7 +22,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Type-checks and builds dist/, which the Rust crate embeds.
       - run: npm run build
 
       - uses: dtolnay/rust-toolchain@stable

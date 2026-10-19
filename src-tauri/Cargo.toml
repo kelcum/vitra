@@ -40,7 +40,6 @@ chacha20poly1305 = "0.10"
 hickory-resolver = { version = "0.25", default-features = false, features = ["tokio", "system-config"] }
 tauri-plugin-updater = "2"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
-# Memories: pictures of the game window.
 jpeg-encoder = "0.7.1"
 
 [profile.release]
@@ -51,7 +50,6 @@ panic = "abort"
 strip = true
 
 [target."cfg(windows)".dependencies]
-# Windows Graphics Capture for Memories (the same windows crate version Tauri uses).
 windows = { version = "0.62", features = [
   "Foundation",
   "Graphics",

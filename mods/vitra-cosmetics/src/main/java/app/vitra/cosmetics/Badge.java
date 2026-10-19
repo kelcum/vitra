@@ -8,12 +8,7 @@ import net.minecraft.resources.Identifier;
 
 import java.util.UUID;
 
-/**
- * The little Vitra cube put in front of a Vitra player's name. The owner's is animated: 16 glyphs in
- * the badge font, one per frame, picked by the clock every time the name is drawn.
- */
 public final class Badge {
-    /** Glyphs from assets/vitra/font/badge.json, drawn in their own colours (white means "don't tint"). */
     private static final Style STYLE = Style.EMPTY
         .withFont(new FontDescription.Resource(Identifier.fromNamespaceAndPath("vitra", "badge")))
         .withColor(0xFFFFFF)

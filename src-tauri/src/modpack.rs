@@ -1,6 +1,3 @@
-//! Modrinth modpacks (`.mrpack`): install from Modrinth, import from a file,
-//! and export an instance. Format: https://support.modrinth.com/en/articles/8802351
-
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -19,7 +16,6 @@ use crate::state::AppState;
 use crate::tasks::TaskHandle;
 use crate::util;
 
-/// Hosts the .mrpack spec allows downloads from.
 const ALLOWED_HOSTS: [&str; 4] = ["cdn.modrinth.com", "github.com", "raw.githubusercontent.com", "gitlab.com"];
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -151,7 +147,6 @@ async fn import_mrpack(
     .await;
 
     if let Err(e) = result {
-        // Leave nothing half-installed behind.
         let _ = std::fs::remove_dir_all(instances::instance_dir(state, &inst.id));
         return Err(e);
     }
@@ -239,7 +234,6 @@ pub struct ExportOptions {
     pub name: String,
     pub version: String,
     pub summary: Option<String>,
-    /// Top-level entries of the game folder to include (e.g. "config", "options.txt").
     pub include: Vec<String>,
     pub out_path: String,
 }
@@ -273,7 +267,6 @@ fn add_dir_to_zip(
 pub async fn export_modpack(state: State<'_, Arc<AppState>>, id: String, options: ExportOptions) -> Result<String> {
     let state = state.inner().clone();
     let inst = instances::load(&state, &id)?;
-    // Make sure every mod is identified so Modrinth files are referenced, not copied.
     crate::content::refresh(&state, &inst, "mods").await?;
     crate::content::refresh(&state, &inst, "resourcepacks").await?;
     crate::content::refresh(&state, &inst, "shaderpacks").await?;
@@ -290,7 +283,6 @@ pub async fn export_modpack(state: State<'_, Arc<AppState>>, id: String, options
             if !options.include.iter().any(|i| i == folder) {
                 continue;
             }
-            // Disabled files aren't part of the pack.
             if !game_dir.join(key).exists() {
                 continue;
             }

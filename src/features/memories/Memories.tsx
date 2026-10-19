@@ -118,7 +118,6 @@ export default function Memories() {
     });
   }, [all, filter, query]);
 
-  // Grouped by day, newest first (the list already comes newest first).
   const days = useMemo(() => {
     const out: { label: string; items: Memory[] }[] = [];
     for (const m of shown) {
@@ -363,7 +362,6 @@ function MemoryViewer({
     return () => window.removeEventListener("keydown", onKey);
   }, [m, onPrev, onNext]);
 
-  // Keeps showing the last memory while the viewer animates closed.
   const [last, setLast] = useState(m);
   useEffect(() => {
     if (m) setLast(m);

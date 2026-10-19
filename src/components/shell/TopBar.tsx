@@ -41,10 +41,6 @@ const NAV: { page: Page; label: string; icon: React.ReactNode; match?: Page[] }[
   { page: "performance", label: "Performance", icon: <Gauge /> },
 ];
 
-/**
- * The whole app chrome in one floating bar: brand, the main navigation as a
- * liquid-glass pill, activity, settings, account and the window controls.
- */
 export function TopBar() {
   return (
     <header className="topbar" data-tauri-drag-region>

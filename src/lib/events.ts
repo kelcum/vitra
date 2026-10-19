@@ -6,26 +6,20 @@ import { formatDuration } from "./format";
 import type { Account, GameExit, LogLine, Memory, Settings, TaskSnapshot } from "./types";
 import { toast, useAccounts, useDialogs, useInstances, useLogs, useNav, useSettings, useTasks, useToasts } from "./store";
 
-/** Bumped whenever an instance's installed content changes. */
 export const useContentVersion = create<{ v: number; bump: () => void }>((set) => ({
   v: 0,
   bump: () => set((s) => ({ v: s.v + 1 })),
 }));
 
-/** Bumped whenever a memory is saved. */
 export const useMemoryVersion = create<{ v: number; bump: () => void }>((set) => ({
   v: 0,
   bump: () => set((s) => ({ v: s.v + 1 })),
 }));
 
-/** Memories made in each running game, announced when it closes. */
 const newMemories = new Map<string, Memory[]>();
 
-// Backups aren't here: the Back up menu item says where the file went.
 const NOTIFY_KINDS = new Set(["install", "modpack", "content", "java", "export", "copy"]);
 
-// Ambient motion (and the 3D skin viewer) pauses whenever nobody is looking:
-// game running, window hidden/minimized/unfocused, or no input for a minute.
 let minimized = false;
 let focused = document.hasFocus();
 let lastInput = Date.now();
@@ -65,7 +59,6 @@ export async function wireEvents() {
 
   document.addEventListener("visibilitychange", updateIdle);
   trackActivity();
-  // Minimized windows don't always report `hidden`; treat minimize as idle too.
   const win = getCurrentWindow();
   win.onResized(async () => {
     minimized = await win.isMinimized().catch(() => false);
@@ -129,10 +122,8 @@ export async function wireEvents() {
     useMemoryVersion.getState().bump();
   });
   await listen("instances://changed", () => useInstances.getState().refresh());
-  // The backend changed a setting (selected instance after an install, active account, …).
   await listen<Settings>("settings://changed", ({ payload }) => useSettings.getState().external(payload));
 
-  // Pick up anything already running/in progress (e.g. after a reload).
   await refreshRunning();
   for (const t of await api.listTasks()) useTasks.getState().upsert(t);
 }

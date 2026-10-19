@@ -1,19 +1,9 @@
-// api.xan.gripe: Vitra cosmetics.
-//
-// Vitra proves a player owns their Minecraft account with the key pair Mojang issues every account
-// for chat signing (see verifyProof); nothing secret ever leaves the player's computer.
-// The game then gets a short-lived token so it can say "I'm on Vitra right now" (the badge).
-// Capes are public; who is on Vitra right now is only told to Vitra players in game (with a token).
-// Players can delete everything kept about them (DELETE /v1/me).
+import MOJANG_KEYS from './mojang-keys.json';
 
-import MOJANG_KEYS from './mojang-keys.json';   // api.minecraftservices.com/publickeys → playerCertificateKeys
-
-const ONLINE_MS = 3 * 60 * 1000;          // a ping within this window counts as online
+const ONLINE_MS = 3 * 60 * 1000;
 const TOKEN_TTL_MS = 24 * 3600 * 1000;
-const PING_WRITE_MS = 60 * 1000;          // don't rewrite last_seen more often than this
+const PING_WRITE_MS = 60 * 1000;
 const MAX_PNG_BYTES = 1_500_000;
-// Every Vitra player in view decodes a cape, so its decoded size is capped: 256 px wide at most,
-// and 256×128×48 pixels (about 6 MB) across all frames.
 const MAX_CAPE_WIDTH = 256;
 const MAX_CAPE_FRAMES = 48;
 const MAX_CAPE_PIXELS = 256 * 128 * 48;
@@ -60,24 +50,16 @@ async function route(req, env, ctx, url) {
   throw new HttpError(404, 'Not found.');
 }
 
-// ── sign-in ────────────────────────────────────────────────────────────────
-//
-// Mojang's session server won't answer Cloudflare, so ownership is proven with the key pair every
-// Minecraft account gets for chat signing: Mojang signs (UUID, expiry, public key), and the player
-// signs our message with the private key. Both checks run here, without asking Mojang anything.
-
 const PROOF_MAX_AGE_MS = 5 * 60 * 1000;
 const b64bytes = s => Uint8Array.from(atob(String(s)), c => c.charCodeAt(0));
 let mojangKeys;
 
 async function mojangCertificateKeys() {
-  // Mojang signs with SHA-1; SHA-256 is accepted too in case that ever changes.
   mojangKeys ??= await Promise.all(MOJANG_KEYS.flatMap(k => ['SHA-1', 'SHA-256'].map(hash =>
     crypto.subtle.importKey('spki', b64bytes(k.publicKey), { name: 'RSASSA-PKCS1-v1_5', hash }, false, ['verify']))));
   return mojangKeys;
 }
 
-// proof: { uuid, publicKey (base64 DER), expiresAt (ms), keySignature (Mojang's, base64), ts (ms), signature (base64) }
 async function verifyProof(name, proof, purpose) {
   if (typeof name !== 'string' || !NAME_RE.test(name)) throw new HttpError(400, 'Bad player name.');
   const p = proof && typeof proof === 'object' ? proof : {};
@@ -90,7 +72,6 @@ async function verifyProof(name, proof, purpose) {
   try { keyDer = b64bytes(p.publicKey); mojangSig = b64bytes(p.keySignature); playerSig = b64bytes(p.signature); } catch {
     throw new HttpError(400, 'Proof of account is malformed.');
   }
-  // What Mojang signed: UUID (16 bytes) + expiry (8 bytes, big endian) + the public key.
   const payload = new Uint8Array(24 + keyDer.length);
   for (let i = 0; i < 16; i++) payload[i] = parseInt(p.uuid.substr(i * 2, 2), 16);
   new DataView(payload.buffer).setBigUint64(16, BigInt(p.expiresAt));
@@ -116,8 +97,6 @@ async function sha256hex(text) {
   return [...new Uint8Array(d)].map(x => x.toString(16).padStart(2, '0')).join('');
 }
 
-// The name is whatever the launcher sent; only the UUID is proven. It's kept for the owner's own
-// reference and never handed out.
 async function upsertUser(env, who) {
   const now = Date.now();
   await env.DB.prepare(
@@ -133,8 +112,6 @@ async function auth(env, b) {
   return json({ token, uuid: who.uuid, expiresIn: TOKEN_TTL_MS, ...(await player(env, who.uuid, true)) });
 }
 
-// ── presence and lookups (what the game asks for) ─────────────────────────
-
 async function ping(env, req, b) {
   const claims = await verifyToken(env, bearer(req));
   if (!claims) throw new HttpError(401, 'Token expired.');
@@ -145,13 +122,11 @@ async function ping(env, req, b) {
   return json({ players: await lookup(env, [claims.u, ...players], true) });
 }
 
-// `presence`: whether to say who is on Vitra right now (for Vitra players in game, who have a token).
-// Without it only capes are told, which anyone can see in game anyway.
 async function lookup(env, list, presence) {
   if (!Array.isArray(list)) throw new HttpError(400, 'Expected a list of players.');
   const ids = [...new Set(list.filter(u => typeof u === 'string').map(u => u.replace(/-/g, '').toLowerCase()).filter(u => UUID_RE.test(u)))].slice(0, MAX_LOOKUP);
   const out = {}, now = Date.now();
-  for (let i = 0; i < ids.length; i += 90) {                      // D1 allows 100 bound values per query
+  for (let i = 0; i < ids.length; i += 90) {
     const chunk = ids.slice(i, i + 90);
     const { results } = await env.DB.prepare(
       `SELECT u.uuid, u.last_seen, c.id, c.w, c.h, c.frames, c.delay FROM users u
@@ -167,13 +142,10 @@ async function lookup(env, list, presence) {
 }
 
 const isAdmin = (env, uuid) => (env.ADMINS || '').split(',').map(s => s.trim()).includes(uuid);
-// Which badge the game draws: the owner gets the animated one.
 const badgeFor = (env, uuid) => (isAdmin(env, uuid) ? 'owner' : 'vitra');
 
 const capeInfo = r => ({ id: r.id, url: `https://api.xan.gripe/v1/capes/${r.id}.png`, w: r.w, h: r.h, frames: r.frames, delay: r.delay });
 
-// `own`: the player asking about themselves (signed in with proof), who may see everything.
-// Anyone else only learns which cape a player wears.
 async function player(env, uuid, own) {
   const r = await env.DB.prepare(
     'SELECT u.uuid, u.name, u.last_seen, c.id, c.w, c.h, c.frames, c.delay FROM users u LEFT JOIN capes c ON c.id = u.cape WHERE u.uuid = ?1'
@@ -183,14 +155,11 @@ async function player(env, uuid, own) {
   return r ? { vitra: true, name: r.name, online: Date.now() - r.last_seen < ONLINE_MS, badge: badgeFor(env, r.uuid), cape } : { vitra: false, cape: null };
 }
 
-// How many people use Vitra, and how many are in game right now. Counts only, no names.
 async function stats(env) {
   const r = await env.DB.prepare('SELECT COUNT(*) AS players, COALESCE(SUM(last_seen > ?1), 0) AS online FROM users')
     .bind(Date.now() - ONLINE_MS).first();
   return json({ players: r.players, online: r.online }, 200, { 'cache-control': 'public, max-age=30' });
 }
-
-// ── capes ──────────────────────────────────────────────────────────────────
 
 async function presets(env) {
   const { results } = await env.DB.prepare(
@@ -206,7 +175,6 @@ async function capeImage(env, ctx, req, id) {
   if (hit) return hit;
   const r = await env.DB.prepare('SELECT png FROM capes WHERE id = ?1').bind(id).first();
   if (!r) throw new HttpError(404, 'No such cape.');
-  // A day, not forever: a deleted cape should stop being served soon.
   const res = new Response(new Uint8Array(r.png), {
     headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=86400' },
   });
@@ -214,7 +182,6 @@ async function capeImage(env, ctx, req, id) {
   return res;
 }
 
-// Checks a cape image: a PNG whose frames (each a 2:1 cape texture) are stacked top to bottom.
 async function storeCape(env, b, owner) {
   if (typeof b.image !== 'string') throw new HttpError(400, 'Missing image.');
   let bytes;
@@ -239,7 +206,6 @@ async function storeCape(env, b, owner) {
   return id;
 }
 
-// Body: { name, proof } plus one of { preset: slug } | { image: base64 PNG, frames, delay } | { remove: true }
 async function setCape(env, b) {
   const purpose = b.preset ? `cape:preset:${b.preset}` : b.image ? `cape:image:${await sha256hex(b.image)}` : 'cape:remove';
   const who = await verifyProof(b.name, b.proof, purpose);
@@ -261,8 +227,6 @@ async function setCape(env, b) {
   return json(await player(env, who.uuid, true));
 }
 
-// The PNG's structure: signature, IHDR first (8-bit RGB or RGBA, not interlaced), chunks that fit the
-// file, at least one IDAT, IEND last. Decoders in the game get only well-formed images.
 function checkPng(bytes) {
   const sig = [137, 80, 78, 71, 13, 10, 26, 10];
   if (bytes.length < 57 || sig.some((v, i) => bytes[i] !== v)) throw new HttpError(400, 'The cape has to be a PNG.');
@@ -284,9 +248,6 @@ function checkPng(bytes) {
   if (!idat || !end || pos !== bytes.length) throw new HttpError(400, 'The cape PNG is damaged.');
 }
 
-// ── your data ──────────────────────────────────────────────────────────────
-
-// Deletes the player's record and the capes they uploaded that nobody else wears.
 async function deleteMe(env, b) {
   const who = await verifyProof(b.name, b.proof, 'delete');
   await env.DB.batch([
@@ -300,8 +261,6 @@ async function deleteMe(env, b) {
   return json({ deleted: true });
 }
 
-// ── admin ──────────────────────────────────────────────────────────────────
-
 async function putPreset(env, req, slug, b) {
   if (!env.ADMIN_KEY || req.headers.get('x-admin-key') !== env.ADMIN_KEY) throw new HttpError(403, 'Not allowed.');
   const id = await storeCape(env, b, 'preset');
@@ -312,15 +271,12 @@ async function putPreset(env, req, slug, b) {
   return json({ slug, id });
 }
 
-// An admin (their UUID is in ADMINS) takes someone's cape off.
 async function removeCape(env, uuid, b) {
   const who = await verifyProof(b.name, b.proof, `admin:remove:${uuid}`);
   if (!isAdmin(env, who.uuid)) throw new HttpError(403, 'Not allowed.');
   await env.DB.prepare('UPDATE users SET cape = NULL WHERE uuid = ?1').bind(uuid).run();
   return json({ removed: uuid });
 }
-
-// ── helpers ────────────────────────────────────────────────────────────────
 
 const bearer = req => (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
 

@@ -12,10 +12,7 @@ import type {
   TaskSnapshot,
 } from "./types";
 
-// ------------------------------------------------------------------ settings
-
 let saveTimer: number | undefined;
-/** Edits made since the last save. */
 let unsaved: Partial<Settings> = {};
 
 interface SettingsStore {
@@ -34,7 +31,6 @@ export const useSettings = create<SettingsStore>((set, get) => ({
     set({ settings: s });
     return s;
   },
-  // Optimistic: the UI updates instantly, the file write is debounced.
   update: (patch) => {
     const cur = get().settings;
     if (!cur) return;
@@ -48,7 +44,6 @@ export const useSettings = create<SettingsStore>((set, get) => ({
       api.saveSettings(get().settings ?? next).catch((e) => toast.error("Couldn't save settings", errorMessage(e)));
     }, 250);
   },
-  // Settings the backend changed: take them, keeping edits that are still waiting to be saved.
   external: (s) => {
     const next = { ...s, ...unsaved };
     applyAppearance(next);
@@ -59,8 +54,6 @@ export const useSettings = create<SettingsStore>((set, get) => ({
     set({ settings: s });
   },
 }));
-
-// ------------------------------------------------------------------ navigation
 
 export type Page = "home" | "library" | "instance" | "memories" | "discover" | "servers" | "skins" | "performance" | "settings";
 
@@ -89,8 +82,6 @@ export const useNav = create<NavStore>((set, get) => ({
   },
 }));
 
-// ------------------------------------------------------------------ instances
-
 interface InstanceStore {
   instances: InstanceView[];
   loaded: boolean;
@@ -110,14 +101,11 @@ export const useInstances = create<InstanceStore>((set) => ({
   setRunning: (list) => set({ running: Object.fromEntries(list.map((r) => [r.instanceId, r])) }),
 }));
 
-/** The instance the Play button targets. */
 export function useSelectedInstance(): InstanceView | null {
   const instances = useInstances((s) => s.instances);
   const selected = useSettings((s) => s.settings?.selectedInstance);
   return instances.find((i) => i.id === selected) ?? instances[0] ?? null;
 }
-
-// ------------------------------------------------------------------ tasks
 
 interface TaskStore {
   tasks: Record<string, TaskSnapshot>;
@@ -143,8 +131,6 @@ export function activeTaskFor(tasks: Record<string, TaskSnapshot>, instanceId: s
     .sort((a, b) => b.startedAt - a.startedAt)[0];
 }
 
-// ------------------------------------------------------------------ accounts
-
 interface AccountStore {
   accounts: Account[];
   loaded: boolean;
@@ -162,8 +148,6 @@ export function useActiveAccount(): Account | null {
   const active = useSettings((s) => s.settings?.activeAccount);
   return accounts.find((a) => a.uuid === active) ?? accounts[0] ?? null;
 }
-
-// ------------------------------------------------------------------ game logs
 
 const MAX_LINES = 5000;
 
@@ -183,8 +167,6 @@ export const useLogs = create<LogStore>((set) => ({
     }),
   clear: (id) => set((s) => ({ lines: { ...s.lines, [id]: [] } })),
 }));
-
-// ------------------------------------------------------------------ toasts
 
 export interface Toast {
   id: number;
@@ -211,8 +193,6 @@ export const useToasts = create<ToastStore>((set, get) => ({
   dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));
 
-// A failing background task reports its error, and so does the screen that started it. The same
-// error text within a few seconds is shown once.
 const recentErrors = new Map<string, number>();
 const ERROR_REPEAT_MS = 4000;
 
@@ -228,8 +208,6 @@ export const toast = {
     useToasts.getState().push({ kind: "error", title, body });
   },
 };
-
-// ------------------------------------------------------------------ dialogs
 
 interface DialogStore {
   crash: GameExit | null;
@@ -251,7 +229,6 @@ export const useDialogs = create<DialogStore>((set) => ({
   set: (patch) => set(patch),
 }));
 
-// Dev-only handle for automated UI checks (stripped from production builds).
 if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__vitra = { useSettings, useNav, useInstances, useTasks, useDialogs };
 }

@@ -1,13 +1,3 @@
-//! Microsoft account sign-in for Minecraft.
-//!
-//! Flow: Microsoft OAuth device code → Xbox Live → XSTS → Minecraft services.
-//! The user signs in on Microsoft's own page; Vitra never sees a password.
-//!
-//! Storage: account metadata lives in `accounts.json`. Tokens are encrypted
-//! with ChaCha20-Poly1305 into `accounts.secure`; the 256-bit key is held in
-//! the OS credential store (Windows Credential Manager / macOS Keychain /
-//! Secret Service), never on disk in plain text.
-
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -58,8 +48,6 @@ pub struct Identity {
     pub user_type: String,
     pub demo: bool,
 }
-
-// ---------------------------------------------------------------- storage
 
 fn key() -> Result<Key> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
@@ -118,8 +106,6 @@ fn save_accounts(state: &AppState, accounts: &[Account]) -> Result<()> {
     util::write_json(&state.root.join("accounts.json"), &accounts)
 }
 
-// ---------------------------------------------------------------- protocol
-
 #[derive(Deserialize)]
 struct DeviceCodeResp {
     device_code: String,
@@ -161,11 +147,6 @@ struct XboxClaims {
     xui: Vec<HashMap<String, String>>,
 }
 
-/// Vitra's own Azure app, the one submitted to Mojang for Minecraft API
-/// access. A client ID isn't a secret (every sign-in request carries it and
-/// publisher-domain verification publishes it), so this only keeps it out of
-/// plain sight: masked so it isn't a readable string in the binary, and never
-/// shown in the UI, written to settings or logged.
 const BUILTIN_CLIENT_ID: [u8; 36] = [
     0x13, 0x59, 0x12, 0x10, 0x55, 0x02, 0x0a, 0x58, 0x5c, 0x46, 0x0b, 0x01, 0x1f, 0x4a, 0x58, 0x59, 0x47, 0x11, 0x5b, 0x08, 0x15, 0x4b, 0x04, 0x17,
     0x5f, 0x0b, 0x44, 0x41, 0x58, 0x00, 0x1e, 0x06, 0x5a, 0x04, 0x41, 0x44,
@@ -176,7 +157,6 @@ pub fn builtin_client_id() -> String {
     BUILTIN_CLIENT_ID.iter().zip(MASK.iter().cycle()).map(|(b, k)| (b ^ k) as char).collect()
 }
 
-/// A custom ID from Settings → Accounts (for developers) wins over the built-in one.
 fn custom_client_id(state: &AppState) -> Option<String> {
     state.settings().msa_client_id.map(|id| id.trim().to_string()).filter(|id| !id.is_empty())
 }
@@ -331,7 +311,6 @@ async fn finish_login(state: &AppState, msa: MsaTokens) -> Result<Account> {
     Ok(account)
 }
 
-/// Deterministic UUID for demo play so the demo world keeps the same player.
 fn demo_uuid(seed: &str) -> String {
     let hash = util::sha1_bytes(format!("VitraDemo:{seed}").as_bytes());
     let mut chars: Vec<char> = hash.chars().take(32).collect();
@@ -339,13 +318,10 @@ fn demo_uuid(seed: &str) -> String {
     chars.into_iter().collect()
 }
 
-/// One refresh at a time: two at once would each save what they got, and the later save could put
-/// back a refresh token Microsoft has already replaced.
 static REFRESH_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 async fn refresh(state: &AppState, uuid: &str) -> Result<(String, String)> {
     let _one_at_a_time = REFRESH_LOCK.lock().await;
-    // Read after taking the lock, so a refresh that just finished is seen.
     let mut secrets = load_secrets(state);
     let Some(secret) = secrets.get(uuid).cloned() else {
         bail!("SIGN_IN_AGAIN: This account's sign-in expired. Remove it and sign in again.");
@@ -367,7 +343,6 @@ async fn refresh(state: &AppState, uuid: &str) -> Result<(String, String)> {
         .map_err(|e| Error::Msg(format!("Couldn't reach Microsoft to refresh your sign-in: {e}")))?;
     let status = resp.status();
     if !status.is_success() {
-        // Only a refused refresh token means signing in again; outages and rate limits pass.
         let body: serde_json::Value = resp.json().await.unwrap_or_default();
         let code = body["error"].as_str().unwrap_or_default();
         if matches!(code, "invalid_grant" | "interaction_required" | "consent_required" | "login_required") {
@@ -376,7 +351,6 @@ async fn refresh(state: &AppState, uuid: &str) -> Result<(String, String)> {
         bail!("Microsoft's sign-in service isn't answering right now ({status}). Try again in a minute.");
     }
     let msa: MsaTokens = resp.json().await?;
-    // Keep the new refresh token even if a step below fails: Microsoft may have retired the old one.
     secrets.insert(uuid.to_string(), Secret { msa_refresh: msa.refresh_token.clone(), ..secret });
     save_secrets(state, &secrets)?;
     let (token, expires_at, xuid) = xbox_chain(&state.http, &msa.access_token).await?;
@@ -388,13 +362,10 @@ async fn refresh(state: &AppState, uuid: &str) -> Result<(String, String)> {
     Ok((token, xuid))
 }
 
-/// The last saved Minecraft token, even an expired one.
 fn saved_token(state: &AppState, uuid: &str) -> Option<(String, String)> {
     load_secrets(state).get(uuid).map(|s| (s.mc_token.clone(), s.xuid.clone()))
 }
 
-/// Keeps a saved account's name in step with Mojang (after a name change here or on minecraft.net),
-/// since the game is started with it.
 pub(crate) fn sync_account_name(state: &AppState, uuid: &str, name: &str) -> Result<()> {
     let mut accounts = load_accounts(state);
     let Some(account) = accounts.iter_mut().find(|a| a.uuid.replace('-', "") == uuid.replace('-', "")) else { return Ok(()) };
@@ -415,9 +386,6 @@ pub(crate) fn active_account(state: &AppState) -> Option<Account> {
         .or_else(|| accounts.first().cloned())
 }
 
-/// Proves a player to a third party (OptiFine, Vitra's cape server) the way servers check players:
-/// joins a made-up server id with Mojang's session server and returns that id. The third party then
-/// asks Mojang whether the player joined it, so the access token itself only ever goes to Mojang.
 pub async fn session_join(state: &AppState, uuid: &str, token: &str) -> Result<String> {
     let server_id = uuid::Uuid::new_v4().simple().to_string();
     let resp = state
@@ -432,7 +400,6 @@ pub async fn session_join(state: &AppState, uuid: &str, token: &str) -> Result<S
     Ok(server_id)
 }
 
-/// A valid Minecraft access token for the active account.
 pub async fn access_token(state: &AppState) -> Result<(Account, String)> {
     let Some(account) = active_account(state) else {
         bail!("NO_ACCOUNT: Sign in with a Microsoft account first.");
@@ -455,8 +422,6 @@ pub async fn launch_identity(state: &AppState, demo: bool) -> Result<Identity> {
         Some(account) => {
             let (token, xuid) = match refresh(state, &account.uuid).await {
                 Ok(fresh) => fresh,
-                // Offline, or Microsoft is down: start with the last token anyway. Singleplayer works
-                // without a valid one; servers will ask for a fresh sign-in.
                 Err(e) if !e.to_string().starts_with("SIGN_IN_AGAIN") => match saved_token(state, &account.uuid) {
                     Some(saved) => {
                         log::warn!("Couldn't refresh the sign-in ({e}); starting with the last saved one.");
@@ -480,8 +445,6 @@ pub async fn launch_identity(state: &AppState, demo: bool) -> Result<Identity> {
         }
     }
 }
-
-// ---------------------------------------------------------------- commands
 
 #[tauri::command]
 pub fn list_accounts(state: State<'_, Arc<AppState>>) -> Vec<Account> {
@@ -515,8 +478,6 @@ pub fn remove_account(state: State<'_, Arc<AppState>>, uuid: String) -> Result<(
     Ok(())
 }
 
-/// Starts the device-code flow. The UI shows the code and opens Microsoft's
-/// page; completion arrives as `auth://success` or `auth://error`.
 #[tauri::command]
 pub async fn begin_sign_in(state: State<'_, Arc<AppState>>) -> Result<DeviceCodeInfo> {
     let state = state.inner().clone();
@@ -565,7 +526,7 @@ pub async fn begin_sign_in(state: State<'_, Arc<AppState>>) -> Result<DeviceCode
                 .await;
             let resp = match resp {
                 Ok(r) => r,
-                Err(_) => continue, // transient network error: keep polling
+                Err(_) => continue,
             };
             if resp.status().is_success() {
                 match resp.json::<MsaTokens>().await {
@@ -602,7 +563,6 @@ pub fn cancel_sign_in(state: State<'_, Arc<AppState>>) {
     }
 }
 
-/// Re-validates the active account at startup (refreshes tokens if needed).
 #[tauri::command]
 pub async fn check_active_account(state: State<'_, Arc<AppState>>) -> Result<Option<Account>> {
     let Some(account) = active_account(&state) else { return Ok(None) };
@@ -614,8 +574,6 @@ pub async fn check_active_account(state: State<'_, Arc<AppState>>) -> Result<Opt
 mod tests {
     use super::*;
 
-    /// The masked ID decodes to a well-formed GUID (checked by shape, so the
-    /// plain value never appears in the source).
     #[test]
     fn builtin_client_id_is_a_guid() {
         let id = builtin_client_id();

@@ -71,7 +71,6 @@ export default function Discover({ initialType }: { initialType?: string }) {
   }, []);
   useEffect(() => setCategories([]), [type]);
 
-  // Which projects are already in the target instance.
   useEffect(() => {
     if (!target || type === "modpack") return setInstalled(new Set());
     api
@@ -113,7 +112,6 @@ export default function Discover({ initialType }: { initialType?: string }) {
     fetchPage(0);
   }, [fetchPage]);
 
-  // Infinite scroll.
   useEffect(() => {
     const el = sentinel.current;
     if (!el) return;
@@ -255,8 +253,6 @@ export default function Discover({ initialType }: { initialType?: string }) {
   );
 }
 
-// ------------------------------------------------------------------ install helpers
-
 async function installProject(
   type: ProjectType,
   projectId: string,
@@ -269,7 +265,6 @@ async function installProject(
     toast.info(`Installing ${title}`, "A new instance is being created. Progress is shown in Downloads.");
     api
       .installModpack(projectId, versionId ?? null, title, iconUrl)
-      // The finished install task says when it's ready.
       .then(() => useInstances.getState().refresh())
       .catch((e) => toast.error(`Couldn't install ${title}`, errorMessage(e)));
     return;
@@ -282,7 +277,6 @@ async function installProject(
     const plan = await api.planInstall(target.id, [{ projectId, versionId: versionId ?? null, projectType: type, title }]);
     const clean = plan.conflicts.length === 0 && plan.warnings.length === 0 && plan.skipped.length === 0;
     if (clean && plan.files.length > 0) {
-      // Beginner-friendly: nothing to decide, so just install.
       await api.applyPlan(plan);
       const deps = plan.files.length - 1;
       if (deps > 0) toast.info(`Installing ${title}`, `Plus ${deps} required ${deps === 1 ? "dependency" : "dependencies"}.`);
@@ -380,8 +374,6 @@ function ResultCard({
     </div>
   );
 }
-
-// ------------------------------------------------------------------ detail
 
 function ProjectDialog({
   hit,

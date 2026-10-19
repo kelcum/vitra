@@ -17,15 +17,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Downloads Vitra capes and turns each animation frame into a texture. The cape handed to the
- * renderer picks the current frame every time it's drawn, so animated capes play by themselves.
- * Capes nobody has drawn for a while are freed again.
- */
 public final class Capes {
-    /** Capes only come from Vitra's server. */
     private static final String CAPE_URL = VitraCosmetics.API + "/v1/capes/";
-    /** The server's limits: 256 px wide at most, and 256×128×48 pixels across all frames. */
     private static final int MAX_WIDTH = 256;
     private static final long MAX_PIXELS = 256L * 128 * 48;
     private static final long UNUSED_MS = TimeUnit.MINUTES.toMillis(5);
@@ -39,7 +32,6 @@ public final class Capes {
 
     private Capes() {}
 
-    /** The texture to draw as this player's cape, or null to leave their cape alone (still loading, or no Vitra cape). Game thread. */
     public static ClientAsset.Texture textureFor(UUID player) {
         long now = System.currentTimeMillis();
         if (now - lastSweep > SWEEP_MS) {
@@ -57,14 +49,14 @@ public final class Capes {
     private static void download(Directory.Cape cape) {
         if (!cape.url().startsWith(CAPE_URL) || !fits(cape.width(), cape.height())) {
             VitraCosmetics.LOG.warn("Skipping cape {}: not from Vitra's server, or too big", cape.id());
-            return;                                          // stays in `started`, so it isn't tried again
+            return;
         }
         HttpRequest req = HttpRequest.newBuilder(URI.create(cape.url())).timeout(Duration.ofSeconds(20))
             .header("user-agent", "VitraCosmetics/1.0").build();
         http.sendAsync(req, HttpResponse.BodyHandlers.ofByteArray()).whenComplete((res, err) -> {
             if (err != null || res.statusCode() != 200) {
                 VitraCosmetics.LOG.warn("Couldn't download cape {}: {}", cape.id(), err != null ? err.toString() : "HTTP " + res.statusCode());
-                started.remove(cape.id());                     // try again next time it's needed
+                started.remove(cape.id());
                 return;
             }
             Minecraft.getInstance().execute(() -> register(cape, res.body()));
@@ -75,9 +67,7 @@ public final class Capes {
         return width > 0 && width <= MAX_WIDTH && width * height <= MAX_PIXELS;
     }
 
-    /** Splits the image into frames (stacked top to bottom) and registers one texture per frame. Game thread only. */
     private static void register(Directory.Cape cape, byte[] png) {
-        // Check the size the PNG declares (IHDR) before decoding it.
         if (png.length < 24 || !fits(readInt(png, 16), readInt(png, 20))) {
             VitraCosmetics.LOG.warn("Skipping cape {}: the image is too big", cape.id());
             return;
@@ -100,7 +90,6 @@ public final class Capes {
         }
     }
 
-    /** Frees capes nobody has drawn for a while. Game thread. */
     private static void freeUnused(long now) {
         for (Map.Entry<String, Animated> e : loaded.entrySet()) {
             String id = e.getKey();
@@ -116,7 +105,6 @@ public final class Capes {
         return ((b[at] & 0xFFL) << 24) | ((b[at + 1] & 0xFFL) << 16) | ((b[at + 2] & 0xFFL) << 8) | (b[at + 3] & 0xFFL);
     }
 
-    /** A cape texture that shows a different frame depending on the time. */
     private record Animated(Identifier id, Identifier[] frames, int delay) implements ClientAsset.Texture {
         @Override
         public Identifier texturePath() {

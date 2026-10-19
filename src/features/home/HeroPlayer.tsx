@@ -7,13 +7,8 @@ import type { ProfileView, VitraCape } from "../../lib/types";
 import { defaultSkin, SkinViewer3D } from "../skins/SkinViewer3D";
 import { loadVitraCape, type AnimatedCape } from "../skins/vitraCape";
 
-// Coming back to Home shouldn't ask Mojang for the skin every time.
 const PROFILE_TTL_MS = 2 * 60 * 1000;
 
-/**
- * You, on the Home screen: your skin wearing your Vitra cape (else your Mojang cape), slowly
- * turning. Loaded separately so the 3D engine doesn't slow down startup.
- */
 export default function HeroPlayer({ vitraCape }: { vitraCape: VitraCape | null }) {
   const account = useActiveAccount();
   const accent = useSettings((s) => s.settings?.accent ?? "#7c9cff");
@@ -45,7 +40,6 @@ export default function HeroPlayer({ vitraCape }: { vitraCape: VitraCape | null 
   useEffect(() => {
     setAnimated(null);
     if (!vitraCape) return;
-    // Only the latest cape may land: an older one finishing late would otherwise replace it.
     let live = true;
     loadVitraCape(vitraCape)
       .then((a) => live && setAnimated(a))

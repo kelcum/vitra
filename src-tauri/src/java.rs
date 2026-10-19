@@ -1,10 +1,3 @@
-//! Java runtime management.
-//!
-//! Vitra prefers Mojang's own runtimes (the same ones the official launcher
-//! uses), downloaded per component (`java-runtime-delta` = Java 21, etc.) and
-//! verified file-by-file. Java installations already on the system are
-//! detected and can be selected per instance.
-
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -30,7 +23,6 @@ pub struct JavaInstall {
     pub major: u32,
     pub arch: String,
     pub vendor: String,
-    /// "managed" (downloaded by Vitra) or "system".
     pub source: String,
     pub component: Option<String>,
 }
@@ -66,7 +58,6 @@ pub fn parse_major(version: &str) -> u32 {
     }
 }
 
-/// Reads the `release` file every JDK/JRE ships with — no process spawn needed.
 fn read_release(home: &Path) -> Option<(String, String, String)> {
     let text = std::fs::read_to_string(home.join("release")).ok()?;
     let mut map = HashMap::new();
@@ -81,7 +72,6 @@ fn read_release(home: &Path) -> Option<(String, String, String)> {
     Some((version, vendor, arch))
 }
 
-/// Last-resort probe for a Java binary without a `release` file.
 fn probe_binary(bin: &Path) -> Option<(String, String, String)> {
     let mut cmd = std::process::Command::new(bin);
     cmd.args(["-XshowSettings:properties", "-version"]);
@@ -157,7 +147,6 @@ fn system_candidates() -> Vec<PathBuf> {
             }
         }
     }
-    // Java on PATH (resolve bin/java -> home).
     if let Some(path) = std::env::var_os("PATH") {
         for dir in std::env::split_paths(&path) {
             if java_binary(dir.parent().unwrap_or(&dir)).exists() && dir.ends_with("bin") {
@@ -176,7 +165,6 @@ pub fn detect_all(state: &AppState) -> Vec<JavaInstall> {
     if let Ok(entries) = std::fs::read_dir(state.runtimes_dir()) {
         for e in entries.flatten() {
             let component = e.file_name().to_string_lossy().to_string();
-            // "<component>.next" / ".old" are a runtime update in progress, not a runtime of their own.
             if component.contains('.') {
                 continue;
             }
@@ -240,9 +228,6 @@ struct RuntimeRaw {
     url: String,
 }
 
-/// Makes sure the Mojang runtime `component` is installed and returns the
-/// path to its `java` binary. Falls back to a compatible system Java when
-/// Mojang doesn't publish that runtime for this platform.
 pub async fn ensure_runtime(state: &AppState, task: &TaskHandle, component: &str, major: u32) -> Result<PathBuf> {
     let dir = state.runtimes_dir().join(component);
     let marker = dir.join(".vitra-complete");
@@ -251,7 +236,6 @@ pub async fn ensure_runtime(state: &AppState, task: &TaskHandle, component: &str
     let index: serde_json::Value = match net::cached_json(&state.http, RUNTIME_INDEX, &index_cache).await {
         Ok(v) => v,
         Err(e) => {
-            // Offline: accept an already-installed runtime.
             if marker.exists() && java_binary(&dir).exists() {
                 return Ok(java_binary(&dir));
             }
@@ -266,7 +250,6 @@ pub async fn ensure_runtime(state: &AppState, task: &TaskHandle, component: &str
         .and_then(|v| serde_json::from_value::<RuntimeEntry>(v).ok());
 
     let Some(entry) = entry else {
-        // No official runtime for this platform/component: look for a system Java.
         if let Some(j) = detect_all(state).into_iter().find(|j| j.major == major) {
             return Ok(PathBuf::from(j.path));
         }
@@ -280,14 +263,11 @@ pub async fn ensure_runtime(state: &AppState, task: &TaskHandle, component: &str
         return Ok(java_binary(&dir));
     }
 
-    // An update to an installed runtime is built next to it and swapped in afterwards: on Windows the
-    // files of a Java that a running game uses can't be replaced.
     let installed = marker.exists() && java_binary(&dir).exists();
     let target = if installed { state.runtimes_dir().join(format!("{component}.next")) } else { dir.clone() };
     if !(installed && is_current(&target)) {
         task.stage(format!("Downloading Java {major} runtime"), true);
         if installed && !target.exists() {
-            // Start from the current files, so only what changed is downloaded.
             util::copy_dir_recursive(&dir, &target)?;
             let _ = std::fs::remove_file(target.join(".vitra-complete"));
         }
@@ -310,7 +290,6 @@ pub async fn ensure_runtime(state: &AppState, task: &TaskHandle, component: &str
     Ok(java_binary(&dir))
 }
 
-/// Downloads (or tops up) the files of a Mojang runtime into `dir`.
 async fn download_runtime(state: &AppState, task: &TaskHandle, entry: &RuntimeEntry, component: &str, dir: &Path) -> Result<()> {
     let manifest_path = state.cache_dir().join(format!("runtime-{component}.json"));
     net::fetch_file(&state.http, &entry.manifest.url, &manifest_path, Some(&entry.manifest.sha1)).await?;
@@ -371,7 +350,6 @@ pub async fn list_java(state: State<'_, Arc<AppState>>) -> Result<Vec<JavaInstal
         .map_err(|e| crate::error::Error::Msg(e.to_string()))
 }
 
-/// Validates a user-chosen Java binary and reports its version.
 #[tauri::command]
 pub async fn inspect_java(path: String) -> Result<JavaInstall> {
     tokio::task::spawn_blocking(move || {

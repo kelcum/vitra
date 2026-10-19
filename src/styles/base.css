@@ -73,7 +73,6 @@ textarea,
   border-radius: var(--r-sm);
 }
 
-/* Scrollbars: thin, unobtrusive, only visible on hover of the scroller. */
 * {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
@@ -82,11 +81,6 @@ textarea,
   scrollbar-color: var(--fill-3) transparent;
 }
 
-/* ------------------------------------------------------------------ glass
-   .glass       — top-level surface (blurs what's behind it). Use sparingly:
-                  every blurred layer costs GPU time.
-   .glass-inset — nested surface inside glass. No blur, just a tinted fill.
-   ---------------------------------------------------------------------- */
 .glass {
   position: relative;
   background:
@@ -97,11 +91,8 @@ textarea,
       rgb(255 255 255 / 0) 62%
     ),
     rgb(var(--tint) / var(--glass-alpha));
-  /* Unprefixed last: the CSS minifier keeps only the final declaration of a
-     property and re-adds vendor prefixes from the build targets. */
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
-  /* The visible edge is the gradient rim in ::after. */
   border: 1px solid transparent;
   box-shadow:
     inset 0 1px 0 0 rgb(255 255 255 / var(--glass-hl)),
@@ -110,8 +101,6 @@ textarea,
   border-radius: var(--r-xl);
 }
 
-/* Liquid rim: light catches the top-left and bottom-right edges, like a
-   lens. A masked 1px gradient ring, so it costs no extra blur. */
 .glass::after {
   content: "";
   position: absolute;
@@ -131,23 +120,18 @@ textarea,
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   opacity: 0.6;
-  /* On the pseudo-element itself, so cards keep their own transitions. */
   transition: opacity var(--d-3) var(--ease-out);
 }
-/* Interactive cards: the rim lights up as the pointer arrives. */
 :is(.instance-card, .server-card, .result-card, .news-card, .preset-card, .skin-card, .welcome-card, .servers-hero):hover::after {
   opacity: 1;
 }
 
-/* Specular sheen along the top-left edge — the "liquid" highlight. */
 .glass::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  /* Plain alpha blending: mix-blend-mode would force an extra GPU render
-     surface per panel. */
   background:
     radial-gradient(120% 60% at 0% 0%, rgb(255 255 255 / calc(var(--glass-hl) * 0.22)), transparent 55%),
     radial-gradient(80% 50% at 100% 100%, rgb(var(--accent-rgb) / calc(var(--glass-hl) * 0.1)), transparent 60%);
@@ -172,7 +156,6 @@ textarea,
   --glass-alpha: min(0.86, calc(var(--glass-alpha-base, 0.45) + 0.3));
 }
 
-/* --------------------------------------------------------------- type */
 .t-hero {
   font-size: var(--fs-hero);
   font-weight: 720;
@@ -223,7 +206,6 @@ textarea,
   overflow: hidden;
 }
 
-/* --------------------------------------------------------------- layout */
 .row {
   display: flex;
   align-items: center;
@@ -249,7 +231,6 @@ textarea,
   overscroll-behavior: contain;
 }
 
-/* -------------------------------------------------------------- keyframes */
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -289,7 +270,6 @@ textarea,
   }
 }
 
-/* Motion settings. "off" also stops ambient animations entirely. */
 :root[data-motion="off"] *,
 :root[data-motion="off"] *::before,
 :root[data-motion="off"] *::after {
@@ -298,7 +278,6 @@ textarea,
   transition-duration: 0.001ms !important;
 }
 
-/* While the game runs (or the window is hidden) nothing ambient animates. */
 :root[data-idle="true"] .ambient,
 :root[data-idle="true"] .ambient * {
   animation-play-state: paused !important;

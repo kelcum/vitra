@@ -38,8 +38,6 @@ export function Dialogs() {
   );
 }
 
-// ------------------------------------------------------------------ install plan
-
 function PlanDialog() {
   const plan = useDialogs((s) => s.plan);
   const set = useDialogs((s) => s.set);
@@ -128,9 +126,6 @@ function PlanDialog() {
   );
 }
 
-// ------------------------------------------------------------------ crash
-
-/** Recognises common failure signatures and explains them in plain words. */
 function diagnose(text: string): string[] {
   const hints: string[] = [];
   const t = text.toLowerCase();
@@ -231,8 +226,6 @@ function CrashDialog() {
   );
 }
 
-// ------------------------------------------------------------------ demo
-
 function DemoPrompt() {
   const prompt = useDialogs((s) => s.demoPrompt);
   const set = useDialogs((s) => s.set);
@@ -269,8 +262,6 @@ function DemoPrompt() {
     </Modal>
   );
 }
-
-// ------------------------------------------------------------------ toasts
 
 function Toasts() {
   const toasts = useToasts((s) => s.toasts);

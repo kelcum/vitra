@@ -5,19 +5,11 @@ import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Shows a small Vitra badge next to the names of players using Vitra, and the capes they picked in
- * Vitra (animated ones too). Only players who have this mod see them, like any client's cosmetics.
- *
- * Vitra starts the game with -Dvitra.cosmetics.token=… so this player counts as "on Vitra" while
- * they play; without a token the mod still shows everyone else's badges and capes.
- */
 public final class VitraCosmetics implements ClientModInitializer {
     public static final Logger LOG = LoggerFactory.getLogger("Vitra Cosmetics");
     public static final String API = System.getProperty("vitra.cosmetics.api", "https://api.xan.gripe");
     public static final String TOKEN = System.getProperty("vitra.cosmetics.token", "");
 
-    /** The badge is a glyph in this mod's font, which only loads when Fabric API's resource loader is there. */
     public static boolean badgesAvailable;
 
     @Override
@@ -29,7 +21,6 @@ public final class VitraCosmetics implements ClientModInitializer {
         Directory.start();
     }
 
-    /** Loads every class this mod changes, so a broken hook shows up at startup instead of mid-game. */
     private static void selfTest() {
         for (String c : new String[] {
             "net.minecraft.world.entity.player.Player",

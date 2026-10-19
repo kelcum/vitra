@@ -1,5 +1,3 @@
-//! System information, news, panorama extraction, logs, folders and storage.
-
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -38,7 +36,6 @@ fn gpus() -> Vec<String> {
             #[cfg(windows)]
             {
                 use std::os::windows::process::CommandExt;
-                // Full path: PATH can be minimal when launched from shortcuts or tools.
                 let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
                 let ps = std::path::Path::new(&root).join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
                 let out = std::process::Command::new(if ps.exists() { ps.as_os_str() } else { std::ffi::OsStr::new("powershell") })
@@ -89,8 +86,6 @@ pub async fn system_info() -> Result<SystemInfo> {
     .await
     .map_err(|e| Error::Msg(e.to_string()))
 }
-
-// ---------------------------------------------------------------- news
 
 const NEWS_BASE: &str = "https://launchercontent.mojang.com";
 
@@ -164,8 +159,6 @@ fn decode_entities(s: &str) -> String {
         .replace("&amp;", "&")
 }
 
-/// Converts patch-note HTML into plain text blocks. The launcher never
-/// renders remote HTML directly.
 pub fn html_to_blocks(html: &str) -> Vec<TextBlock> {
     let mut blocks = Vec::new();
     let mut kind = "p".to_string();
@@ -186,7 +179,6 @@ pub fn html_to_blocks(html: &str) -> Vec<TextBlock> {
         let name: String = tag.trim_start_matches('/').chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
         let closing = tag.starts_with('/');
         if !closing && (name == "script" || name == "style") {
-            // Drop the element's contents entirely.
             let close = format!("</{name}");
             let after = &rest[start + end + 1..];
             rest = match after.to_lowercase().find(&close) {
@@ -225,10 +217,6 @@ pub async fn patch_note_body(state: State<'_, Arc<AppState>>, content_path: Stri
     Ok(html_to_blocks(body))
 }
 
-// ---------------------------------------------------------------- panorama
-
-/// Extracts the title-screen panorama from the newest installed vanilla
-/// client jar (the player's own copy of the game).
 #[tauri::command]
 pub async fn panorama(state: State<'_, Arc<AppState>>) -> Result<Vec<String>> {
     let state = state.inner().clone();
@@ -277,8 +265,6 @@ pub fn import_background(state: State<'_, Arc<AppState>>, path: String) -> Resul
     Ok(dest.to_string_lossy().to_string())
 }
 
-// ---------------------------------------------------------------- folders & links
-
 fn is_managed_path(state: &AppState, path: &Path) -> bool {
     let candidates = [state.root.clone(), state.data_dir()];
     let custom: Vec<PathBuf> = instances::list_all(state)
@@ -289,7 +275,6 @@ fn is_managed_path(state: &AppState, path: &Path) -> bool {
     candidates.iter().chain(custom.iter()).any(|base| base.canonicalize().map(|b| canon.starts_with(b)).unwrap_or(false))
 }
 
-/// Opens a folder or file that belongs to the launcher in the system file manager.
 #[tauri::command]
 pub fn open_path(state: State<'_, Arc<AppState>>, path: String) -> Result<()> {
     let p = PathBuf::from(&path);
@@ -329,13 +314,10 @@ pub fn open_url(state: State<'_, Arc<AppState>>, url: String) -> Result<()> {
     state.app.opener().open_url(url, None::<&str>).map_err(|e| Error::Msg(e.to_string()))
 }
 
-// ---------------------------------------------------------------- logs
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogFile {
     pub name: String,
-    /// "log" or "crash".
     pub kind: String,
     pub modified: i64,
     pub size: u64,
@@ -391,7 +373,6 @@ pub fn read_log(state: State<'_, Arc<AppState>>, id: String, name: String, kind:
     Ok(String::from_utf8_lossy(slice).to_string())
 }
 
-/// Reads a crash report by absolute path (as reported by `game://exited`).
 #[tauri::command]
 pub fn read_crash_report(state: State<'_, Arc<AppState>>, path: String) -> Result<String> {
     let p = PathBuf::from(&path);
@@ -400,8 +381,6 @@ pub fn read_crash_report(state: State<'_, Arc<AppState>>, path: String) -> Resul
     }
     Ok(std::fs::read_to_string(p)?)
 }
-
-// ---------------------------------------------------------------- storage
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

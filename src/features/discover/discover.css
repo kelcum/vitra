@@ -14,7 +14,6 @@
   color: var(--text-2);
   white-space: nowrap;
 }
-/* One scrollable row (the mouse wheel scrolls it too), fading out where it continues. */
 .discover-cats {
   display: flex;
   gap: 6px;
@@ -105,7 +104,6 @@
   text-transform: capitalize;
 }
 
-/* ---------------------------------------------------------------- project */
 .project {
   display: flex;
   flex-direction: column;

@@ -17,7 +17,6 @@
   min-height: 0;
 }
 
-/* ---------------------------------------------------------------- content lists */
 .content-tab {
   position: relative;
   display: flex;
@@ -141,7 +140,6 @@
   background: rgb(var(--accent-rgb) / 0.08);
 }
 
-/* ---------------------------------------------------------------- worlds */
 .world-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -166,7 +164,6 @@
   background: linear-gradient(145deg, #3b6e3a, #23401f);
 }
 
-/* ---------------------------------------------------------------- logs */
 .logs-tab {
   display: grid;
   grid-template-columns: 230px minmax(0, 1fr);
@@ -259,7 +256,6 @@
   background: rgb(var(--accent-rgb) / 0.12);
 }
 
-/* ---------------------------------------------------------------- settings tab */
 .settings-tab {
   display: flex;
   flex-direction: column;

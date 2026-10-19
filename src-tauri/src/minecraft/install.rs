@@ -1,8 +1,3 @@
-//! Installs everything an instance needs to launch: version JSONs, loader
-//! profile, Java runtime, client jar, libraries, natives and assets.
-//! Re-running an install is cheap — present files are skipped — so launching
-//! always goes through here to self-heal missing files.
-
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -28,12 +23,9 @@ pub struct Installed {
     pub java: PathBuf,
     pub client_jar: PathBuf,
     pub natives_dir: PathBuf,
-    /// Directory passed as `${game_assets}` for pre-1.7 versions.
     pub legacy_assets: Option<PathBuf>,
 }
 
-/// The version manifest, cached in memory for 10 minutes and on disk for
-/// offline use.
 pub async fn manifest(state: &AppState) -> Result<VersionManifest> {
     let mut guard = state.manifest.lock().await;
     if let Some((at, m)) = guard.as_ref() {
@@ -123,8 +115,6 @@ fn asset_jobs(state: &AppState, index: &AssetIndex) -> Vec<Download> {
         .collect()
 }
 
-/// Pre-1.7 versions read assets by name from a "virtual" folder or the game
-/// directory's `resources` folder.
 fn place_legacy_assets(state: &AppState, id: &str, index: &AssetIndex, game_dir: &Path) -> Result<Option<PathBuf>> {
     if !index.is_virtual && !index.map_to_resources {
         return Ok(None);
@@ -146,7 +136,6 @@ fn place_legacy_assets(state: &AppState, id: &str, index: &AssetIndex, game_dir:
     Ok(Some(target))
 }
 
-/// Extracts old-style native libraries (pre-1.19) into the natives folder.
 fn extract_natives(state: &AppState, version: &VersionJson, dir: &Path) -> Result<()> {
     std::fs::create_dir_all(dir)?;
     for lib in &version.libraries {
@@ -187,9 +176,6 @@ async fn resolve_java(state: &AppState, task: &TaskHandle, inst: &Instance, vani
     java::ensure_runtime(state, task, &vanilla.java_component(), vanilla.java_major()).await
 }
 
-/// Newest Java version each ASM release can read. Loaders that bundle an
-/// older ASM than the game's class files need crash at startup with
-/// "Unsupported class file major version" — catch that before launching.
 fn asm_max_java(version: &str) -> Option<u32> {
     let mut parts = version.split(|c: char| c == '.' || c == '-').map(|p| p.parse::<u32>().ok());
     let major = parts.next()??;
@@ -205,7 +191,7 @@ fn asm_max_java(version: &str) -> Option<u32> {
         (7, 0) => 23,
         (7, _) => 24,
         (8, _) => 25,
-        (m, _) => 17 + m, // 9.9 → 26, 9.10 → 27, …
+        (m, _) => 17 + m,
     })
 }
 
@@ -230,18 +216,14 @@ fn check_asm_support(version: &VersionJson, loader: &str, loader_version: &str, 
     Ok(())
 }
 
-/// Installs (or repairs, when `verify` is set) an instance. Persists the
-/// resolved loader version so it never changes silently.
 pub async fn install_instance(state: &AppState, task: &TaskHandle, mut inst: Instance, verify: bool) -> Result<Installed> {
     task.stage("Reading version information", false);
     let vanilla = vanilla_json(state, &inst.game_version).await?;
     let vanilla_id = vanilla.id.clone();
 
-    // Java first: Forge's installer processors need it.
     let java = resolve_java(state, task, &inst, &vanilla).await?;
     task.check_cancelled()?;
 
-    // Client jar is needed by Forge processors too.
     let client_jar = state.versions_dir().join(&vanilla_id).join(format!("{vanilla_id}.jar"));
     let client = vanilla
         .downloads
@@ -353,7 +335,6 @@ pub async fn latest_release(state: State<'_, Arc<AppState>>) -> Result<String> {
     Ok(manifest(&state).await?.latest.release)
 }
 
-/// Installs or repairs an instance in the background. Returns the task id.
 #[tauri::command]
 pub async fn install_instance_cmd(state: State<'_, Arc<AppState>>, id: String, verify: bool) -> Result<String> {
     let state = state.inner().clone();

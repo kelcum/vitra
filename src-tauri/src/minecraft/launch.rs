@@ -1,6 +1,3 @@
-//! Builds the Java command line, starts the game, streams its log to the UI
-//! and reports how it exited (including crash reports).
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -25,11 +22,8 @@ use crate::util;
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LaunchOptions {
-    /// World folder to join directly (1.20+ "Quick Play").
     pub world: Option<String>,
-    /// Server address to join directly (Quick Play on 1.20+, `--server` before).
     pub server: Option<String>,
-    /// Launch the free demo (no account / account without the game).
     pub demo: bool,
 }
 
@@ -61,8 +55,6 @@ pub struct GameExit {
     pub played_secs: u64,
 }
 
-/// JVM flag presets. "balanced" mirrors the official launcher's G1 defaults;
-/// "low-latency" uses ZGC where the Java version supports it.
 pub fn preset_flags(preset: &str, java_major: u32) -> Vec<String> {
     let g1 = "-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M";
     let flags = match preset {
@@ -75,7 +67,6 @@ pub fn preset_flags(preset: &str, java_major: u32) -> Vec<String> {
     flags.split_whitespace().map(String::from).collect()
 }
 
-/// Splits user-provided argument strings, honouring double quotes.
 pub fn split_args(s: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
@@ -128,13 +119,6 @@ fn build_classpath(state: &AppState, installed: &Installed) -> String {
     entries.join(util::classpath_separator())
 }
 
-/// Forge for 1.17–1.20 and older NeoForge start through BootstrapLauncher,
-/// which turns every classpath jar into a Java module unless its file name
-/// starts with an `-DignoreList` entry. Their profiles list `${version_name}.jar`,
-/// the copy of the game the official launcher keeps under the loader's version
-/// folder. Vitra runs the vanilla jar in place, so its name is added too;
-/// otherwise the game loads twice and Java refuses to start ("Modules _1._20._1
-/// and minecraft export package …").
 fn ignore_client_jar(args: &mut [String], client_jar: &Path) {
     let Some(name) = client_jar.file_name().map(|n| n.to_string_lossy().to_string()) else {
         return;
@@ -194,8 +178,6 @@ pub fn build_command(
     vars.insert("auth_uuid", identity.uuid.clone());
     vars.insert("auth_access_token", identity.token.clone());
     vars.insert("auth_session", format!("token:{}:{}", identity.token, identity.uuid));
-    // Only used by the game for telemetry; left empty so no app ID ends up on
-    // the command line.
     vars.insert("clientid", String::new());
     vars.insert("auth_xuid", identity.xuid.clone());
     vars.insert("user_type", identity.user_type.clone());
@@ -224,7 +206,6 @@ pub fn build_command(
     args.extend(preset_flags(&inst.jvm_preset, java_major));
     args.extend(split_args(&settings.default_jvm_args));
     args.extend(split_args(&inst.jvm_args));
-    // Log4Shell mitigation for every version that ships Log4j 2.
     args.push("-Dlog4j2.formatMsgNoLookups=true".into());
 
     match &v.arguments {
@@ -265,7 +246,6 @@ pub fn build_command(
     if inst.window.fullscreen {
         args.push("--fullscreen".into());
     }
-    // Before Quick Play (1.20), `--server`/`--port` joined a server on start.
     if let (Some(addr), false) = (server, quick_play) {
         let (host, port) = match addr.rsplit_once(':') {
             Some((h, p)) if p.parse::<u16>().is_ok() => (h.to_string(), p.to_string()),
@@ -277,8 +257,6 @@ pub fn build_command(
     Ok(args)
 }
 
-/// Parses Log4j's XML console layout used by Mojang's logging config into
-/// readable lines; anything else passes through as plain text.
 struct LogParser {
     buf: Option<String>,
 }
@@ -348,8 +326,6 @@ impl LogParser {
     }
 }
 
-/// Saves the exact command line (with the access token removed) next to the
-/// game's own logs — the first thing to look at when a launch misbehaves.
 fn write_launch_record(state: &AppState, inst: &Instance, java: &Path, args: &[String], token: &str) {
     let redact = |s: &str| {
         if s.starts_with("-Dvitra.cosmetics.token=") {
@@ -414,7 +390,6 @@ fn set_window_for_game(state: &AppState, running: bool) {
     }
 }
 
-/// Holds an instance's place from "Play" until its game is running (or the launch fails).
 struct LaunchSlot<'a> {
     state: &'a AppState,
     id: String,
@@ -437,8 +412,6 @@ fn reserve<'a>(state: &'a AppState, id: &str) -> Result<LaunchSlot<'a>> {
     Ok(LaunchSlot { state, id: id.to_string() })
 }
 
-/// Reads a game output stream line by line. Bytes that aren't UTF-8 are replaced rather than ending
-/// the read: a reader that stops would let the pipe fill up and freeze the game.
 async fn read_lines(stream: impl AsyncRead + Unpin, mut on_line: impl FnMut(String)) {
     let mut reader = BufReader::new(stream);
     let mut buf = Vec::new();
@@ -468,7 +441,6 @@ pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Re
         let inst = instances::load(&state, &id)?;
         task.stage("Starting Minecraft", false);
         let mut args = build_command(&state, &inst, &installed, &identity, &opts)?;
-        // JVM options go before the main class.
         let cosmetics = crate::cosmetics::launch_args(&state, &inst, &identity).await;
         if let Some(at) = installed.version.main_class.as_ref().and_then(|m| args.iter().position(|a| a == m)) {
             args.splice(at..at, cosmetics);
@@ -494,7 +466,6 @@ pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Re
     let pid = child.id().unwrap_or(0);
     let started_at = util::now_millis();
     let (kill_tx, mut kill_rx) = tokio::sync::watch::channel(false);
-    // Log pipeline: readers → channel → batched emits (~8/sec).
     let (tx, mut rx) = mpsc::unbounded_channel::<LogLine>();
     state.running.lock().unwrap().insert(id.clone(), RunningGame { pid, started_at, kill: kill_tx, log: tx.downgrade() });
     state.presence.game_started(&inst, started_at);
@@ -575,8 +546,6 @@ pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Re
     let st = state.clone();
     tauri::async_runtime::spawn(async move {
         let mut killed = false;
-        // Once the stop button's sender is gone, `changed()` fails at once on every call: stop
-        // listening for it then, or this loop would spin.
         let mut can_stop = true;
         let status = loop {
             tokio::select! {
@@ -604,7 +573,6 @@ pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Re
         }
         let code = status.and_then(|s| s.code());
         let report = newest_crash_report(&game_dir, started_at);
-        // Exit code 0 is a normal quit; killed by the user is not a crash.
         let crashed = !killed && (report.is_some() || code.map(|c| c != 0).unwrap_or(true));
         let exit = GameExit {
             instance_id: id.clone(),
@@ -638,8 +606,6 @@ pub fn stop_instance(state: State<'_, Arc<AppState>>, id: String) -> Result<()> 
     }
 }
 
-/// Development builds only: feeds a line into a running game's log as if the game had printed it,
-/// to try log-driven features (Memories, the Discord status) without playing.
 #[tauri::command]
 pub fn inject_game_log(state: State<'_, Arc<AppState>>, id: String, text: String) -> Result<()> {
     if !cfg!(debug_assertions) {
@@ -712,7 +678,6 @@ mod tests {
         ignore_client_jar(&mut args, &jar);
         assert_eq!(args[0], "-DignoreList=bootstraplauncher,asm,forge-,1.20.1-forge-47.4.10.jar,1.20.1.jar");
         assert_eq!(args[1], "-DlibraryDirectory=libs");
-        // Already covered: left alone.
         ignore_client_jar(&mut args, &jar);
         assert!(args[0].ends_with(",1.20.1-forge-47.4.10.jar,1.20.1.jar"));
     }

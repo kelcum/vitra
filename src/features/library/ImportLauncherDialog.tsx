@@ -10,7 +10,6 @@ import { formatBytes, formatDuration, LOADER_LABEL } from "../../lib/format";
 import { toast, useInstances, useNav } from "../../lib/store";
 import type { ExternalInstance, Loader } from "../../lib/types";
 
-/** Copies instances from Prism Launcher / MultiMC. The originals aren't touched. */
 export function ImportLauncherDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const refresh = useInstances((s) => s.refresh);
   const navigate = useNav((s) => s.navigate);
@@ -39,7 +38,6 @@ export function ImportLauncherDialog({ open, onClose }: { open: boolean; onClose
   };
 
   const importOne = async (ext: ExternalInstance) => {
-    // The copy runs as a background task with its own progress card.
     onClose();
     try {
       const inst = await api.importExternalInstance(ext.path);

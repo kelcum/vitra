@@ -1,8 +1,5 @@
 use serde::{Serialize, Serializer};
 
-/// Every error that crosses the IPC boundary becomes a human-readable string.
-/// Messages are written for players, not developers: they say what failed and,
-/// where possible, what to do about it.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("{0}")]

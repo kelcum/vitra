@@ -7,7 +7,6 @@ use sha1::{Digest, Sha1};
 use crate::bail;
 use crate::error::Result;
 
-/// SHA-1 of a file, streamed so large jars don't need to fit in memory.
 pub fn sha1_file(path: &Path) -> Result<String> {
     let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha1::new();
@@ -26,8 +25,6 @@ pub fn sha1_bytes(bytes: &[u8]) -> String {
     hex::encode(Sha1::digest(bytes))
 }
 
-/// Converts a Maven coordinate (`group:artifact:version[:classifier][@ext]`)
-/// into its repository-relative path.
 pub fn maven_path(name: &str) -> Option<String> {
     let (coords, ext) = match name.split_once('@') {
         Some((c, e)) => (c, e),
@@ -47,8 +44,6 @@ pub fn maven_path(name: &str) -> Option<String> {
     Some(format!("{group}/{artifact}/{version}/{file}"))
 }
 
-/// `group:artifact[:classifier]` — used to de-duplicate libraries when a loader
-/// overrides a vanilla library with a different version.
 pub fn maven_key(name: &str) -> String {
     let coords = name.split('@').next().unwrap_or(name);
     let parts: Vec<&str> = coords.split(':').collect();
@@ -59,8 +54,6 @@ pub fn maven_key(name: &str) -> String {
     }
 }
 
-/// Rejects relative paths that could escape their base directory. Used for every
-/// path that comes from a downloaded file (modpack indexes, archives).
 pub fn safe_join(base: &Path, rel: &str) -> Result<PathBuf> {
     let rel_path = Path::new(rel);
     if rel_path.is_absolute() {
@@ -82,8 +75,6 @@ pub fn ensure_parent(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Writes atomically: a crash mid-write leaves the previous file intact.
-/// Each write uses its own temp file so concurrent writers never collide.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     ensure_parent(path)?;
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
@@ -140,7 +131,6 @@ pub fn dir_size(path: &Path) -> u64 {
         .sum()
 }
 
-/// Reads PNG width/height from the IHDR chunk without decoding the image.
 pub fn png_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
     if bytes.len() < 24 || &bytes[..8] != b"\x89PNG\r\n\x1a\n" || &bytes[12..16] != b"IHDR" {
         return None;

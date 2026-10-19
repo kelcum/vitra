@@ -1,11 +1,6 @@
 import { api, parseError } from "./api";
 import { toast, useDialogs, useInstances } from "./store";
 
-/**
- * Launches an instance and turns account problems into the right dialog
- * instead of a raw error: no account → sign in or play the demo, account
- * without the game → demo, expired sign-in → sign in again.
- */
 export async function play(instanceId: string, opts: { world?: string | null; server?: string | null; demo?: boolean } = {}) {
   try {
     await api.launch(instanceId, opts);
