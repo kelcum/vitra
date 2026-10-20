@@ -13,7 +13,12 @@ const UUID_RE = /^[0-9a-f]{32}$/;
 const NAME_RE = /^[A-Za-z0-9_]{1,16}$/;
 const SNOWFLAKE_RE = /^\d{17,20}$/;
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/;
-const MAX_BADGE_IMAGE_BYTES = 1_000_000;
+const MAX_BADGE_IMAGE_BYTES = 1_500_000;
+const MAX_BADGE_PREVIEW_BYTES = 200_000;
+const MAX_BADGE_BODY_BYTES = 2_600_000;
+const BADGE_SHAPES = ['circle', 'rounded', 'none'];
+const BADGE_BACKGROUNDS = ['gradient', 'solid', 'none'];
+const BADGE_EFFECTS = ['shine', 'glint', 'pulse', 'float', 'spin'];
 const MAX_BADGE_COLORS = 4;
 const BADGE_REQUESTS_PER_HOUR = 3;
 const BADGE_REQUESTS_PER_DAY = 8;
@@ -49,14 +54,14 @@ async function route(req, env, ctx, url) {
   if (p === '/v1/presets' && m === 'GET') return presets(env);
   if (p === '/v1/stats' && m === 'GET') return stats(env);
   if (p === '/v1/me/cape' && m === 'PUT') return setCape(env, await body(req));
-  if (p === '/v1/badge-requests' && m === 'POST') return submitBadgeRequest(env, req, await body(req));
+  if (p === '/v1/badge-requests' && m === 'POST') return submitBadgeRequest(env, req, await body(req, MAX_BADGE_BODY_BYTES));
   if (p === '/v1/admin/badge-requests' && m === 'GET') return listBadgeRequests(env, req, url);
   let r;
   if ((r = p.match(/^\/v1\/admin\/badge-requests\/([0-9a-f]{16})$/))) {
     if (m === 'GET') return getBadgeRequest(env, req, r[1]);
     if (m === 'POST') return updateBadgeRequest(env, req, r[1], await body(req));
   }
-  if ((r = p.match(/^\/v1\/admin\/badge-requests\/([0-9a-f]{16})\/image$/)) && m === 'GET') return badgeRequestImage(env, req, r[1]);
+  if ((r = p.match(/^\/v1\/admin\/badge-requests\/([0-9a-f]{16})\/(image|preview)$/)) && m === 'GET') return badgeRequestImage(env, req, r[1], r[2]);
   if ((r = p.match(/^\/v1\/players\/([0-9a-f]{32})$/)) && m === 'GET') return player(env, r[1]);
   if ((r = p.match(/^\/v1\/capes\/([0-9a-f]{20})\.png$/)) && m === 'GET') return capeImage(env, ctx, req, r[1]);
   if ((r = p.match(/^\/v1\/admin\/presets\/([a-z0-9-]{1,32})$/)) && m === 'PUT') return putPreset(env, req, r[1], await body(req));
@@ -309,6 +314,31 @@ function cleanText(value, max, label, multiline = false) {
   return s;
 }
 
+function cleanDesign(d) {
+  if (!d || typeof d !== 'object') return null;
+  const num = (v, min, max, fallback) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.round(Math.min(max, Math.max(min, n)) * 1000) / 1000 : fallback;
+  };
+  return {
+    shape: BADGE_SHAPES.includes(d.shape) ? d.shape : 'circle',
+    background: BADGE_BACKGROUNDS.includes(d.background) ? d.background : 'gradient',
+    effects: [...new Set((Array.isArray(d.effects) ? d.effects : []).filter(e => BADGE_EFFECTS.includes(e)))],
+    speed: num(d.speed, 0.25, 3, 1),
+    zoom: num(d.zoom, 0.1, 5, 1),
+    x: num(d.x, -1, 1, 0),
+    y: num(d.y, -1, 1, 0),
+    rotate: num(d.rotate, -180, 180, 0),
+  };
+}
+
+function decodeUpload(value, max, tooBig) {
+  let bytes;
+  try { bytes = b64bytes(String(value).replace(/^data:[^,]*,/, '')); } catch { throw new HttpError(400, 'That image could not be read.'); }
+  if (bytes.length > max) throw new HttpError(413, tooBig);
+  return bytes;
+}
+
 function sniffImage(bytes) {
   const at = (i, ...v) => v.every((x, j) => bytes[i + j] === x);
   if (at(0, 0x89, 0x50, 0x4e, 0x47)) return 'image/png';
@@ -331,13 +361,17 @@ async function submitBadgeRequest(env, req, b) {
   if (!colors.length || colors.length > MAX_BADGE_COLORS || !colors.every(c => HEX_COLOR_RE.test(c))) {
     throw new HttpError(400, `Pick between 1 and ${MAX_BADGE_COLORS} colors.`);
   }
-  let image = null, imageType = null;
+  let image = null, imageType = null, preview = null;
   if (b.image) {
-    try { image = b64bytes(String(b.image).replace(/^data:[^,]*,/, '')); } catch { throw new HttpError(400, 'That image could not be read.'); }
-    if (image.length > MAX_BADGE_IMAGE_BYTES) throw new HttpError(413, 'That image is too big. Keep it under 1 MB.');
+    image = decodeUpload(b.image, MAX_BADGE_IMAGE_BYTES, 'That image is too big. Keep it under 1.5 MB.');
     imageType = sniffImage(image);
     if (!imageType) throw new HttpError(400, 'The image has to be a PNG, JPG, GIF or WebP.');
   }
+  if (b.preview) {
+    preview = decodeUpload(b.preview, MAX_BADGE_PREVIEW_BYTES, 'The badge preview is too big.');
+    if (sniffImage(preview) !== 'image/png') preview = null;
+  }
+  const design = cleanDesign(b.design);
   const now = Date.now();
   const ip = await sha256hex(`badge|${req.headers.get('cf-connecting-ip') || 'unknown'}|${env.TOKEN_SECRET || ''}`);
   const recent = await env.DB.prepare(
@@ -351,10 +385,10 @@ async function submitBadgeRequest(env, req, b) {
   if (waiting) throw new HttpError(409, "There's already a request waiting for that account. Hang tight.");
   const id = [...crypto.getRandomValues(new Uint8Array(8))].map(x => x.toString(16).padStart(2, '0')).join('');
   await env.DB.prepare(
-    `INSERT INTO badge_requests (id, discord, name, badge, colors, details, image, image_type, source, ip, status, created, posted)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'new', ?11, 0)`
+    `INSERT INTO badge_requests (id, discord, name, badge, colors, details, image, image_type, source, ip, status, created, posted, design, preview)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'new', ?11, 0, ?12, ?13)`
   ).bind(id, discordId, name, badge, JSON.stringify(colors), details, image ? image.buffer : null, imageType,
-    b.source === 'deadbolt' ? 'deadbolt' : 'web', ip, now).run();
+    b.source === 'deadbolt' ? 'deadbolt' : 'web', ip, now, design ? JSON.stringify(design) : null, preview ? preview.buffer : null).run();
   return json({ ok: true, id }, 201);
 }
 
@@ -366,7 +400,7 @@ function feedAllowed(env, req) {
   if (diff) throw new HttpError(403, 'Not allowed.');
 }
 
-const BADGE_COLUMNS = 'id, discord, name, badge, colors, details, image_type, source, status, created, posted';
+const BADGE_COLUMNS = 'id, discord, name, badge, colors, details, image_type, source, status, created, posted, design, preview IS NOT NULL AS has_preview';
 
 const badgeRequestOut = r => ({
   id: r.id,
@@ -376,6 +410,8 @@ const badgeRequestOut = r => ({
   colors: JSON.parse(r.colors),
   details: r.details,
   image: r.image_type ? { type: r.image_type, url: `https://api.xan.gripe/v1/admin/badge-requests/${r.id}/image` } : null,
+  preview: r.has_preview ? `https://api.xan.gripe/v1/admin/badge-requests/${r.id}/preview` : null,
+  design: r.design ? JSON.parse(r.design) : null,
   source: r.source,
   status: r.status,
   created: r.created,
@@ -407,17 +443,20 @@ async function updateBadgeRequest(env, req, id, b) {
   return getBadgeRequest(env, req, id);
 }
 
-async function badgeRequestImage(env, req, id) {
+async function badgeRequestImage(env, req, id, which) {
   feedAllowed(env, req);
-  const r = await env.DB.prepare('SELECT image, image_type FROM badge_requests WHERE id = ?1').bind(id).first();
-  if (!r?.image) throw new HttpError(404, 'No image.');
-  return new Response(new Uint8Array(r.image), { headers: { 'content-type': r.image_type, 'cache-control': 'private, no-store' } });
+  const r = await env.DB.prepare('SELECT image, image_type, preview FROM badge_requests WHERE id = ?1').bind(id).first();
+  const bytes = which === 'preview' ? r?.preview : r?.image;
+  if (!bytes) throw new HttpError(404, 'No image.');
+  return new Response(new Uint8Array(bytes), {
+    headers: { 'content-type': which === 'preview' ? 'image/png' : r.image_type, 'cache-control': 'private, no-store' },
+  });
 }
 
 const bearer = req => (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
 
-async function body(req) {
-  if (Number(req.headers.get('content-length') || 0) > MAX_PNG_BYTES * 1.4 + 4096) throw new HttpError(413, 'Request too large.');
+async function body(req, max = MAX_PNG_BYTES * 1.4 + 4096) {
+  if (Number(req.headers.get('content-length') || 0) > max) throw new HttpError(413, 'Request too large.');
   try { return await req.json(); } catch { throw new HttpError(400, 'Expected JSON.'); }
 }
 

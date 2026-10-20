@@ -39,7 +39,9 @@ CREATE TABLE IF NOT EXISTS badge_requests (
   ip         TEXT NOT NULL,
   status     TEXT NOT NULL DEFAULT 'new',
   created    INTEGER NOT NULL,
-  posted     INTEGER NOT NULL DEFAULT 0
+  posted     INTEGER NOT NULL DEFAULT 0,
+  design     TEXT,
+  preview    BLOB
 );
 
 CREATE INDEX IF NOT EXISTS badge_requests_ip ON badge_requests (ip, created);
