@@ -11,3 +11,4 @@ database_id = "44138582-1188-41ec-9d3b-61d7ebf1ebd3"
 
 [vars]
 ADMINS = "a3656b003a2940e8b2315fdd4037b8e5"
+BADGES = "8d609161ba154839b74880f4d2c160d8:ruinednz"

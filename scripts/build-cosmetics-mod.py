@@ -19,7 +19,7 @@ import zipfile
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 MOD = os.path.join(ROOT, "mods", "vitra-cosmetics")
 MC = sys.argv[1] if len(sys.argv) > 1 else "26.3"
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
 
 def data_dir():

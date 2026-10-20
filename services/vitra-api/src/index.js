@@ -47,6 +47,7 @@ async function route(req, env, ctx, url) {
   if ((r = p.match(/^\/v1\/capes\/([0-9a-f]{20})\.png$/)) && m === 'GET') return capeImage(env, ctx, req, r[1]);
   if ((r = p.match(/^\/v1\/admin\/presets\/([a-z0-9-]{1,32})$/)) && m === 'PUT') return putPreset(env, req, r[1], await body(req));
   if ((r = p.match(/^\/v1\/admin\/capes\/([0-9a-f]{32})$/)) && m === 'DELETE') return removeCape(env, r[1], await body(req));
+  if ((r = p.match(/^\/v1\/admin\/players\/([0-9a-f]{32})\/cape$/)) && m === 'PUT') return assignCape(env, req, r[1], await body(req));
   throw new HttpError(404, 'Not found.');
 }
 
@@ -142,7 +143,8 @@ async function lookup(env, list, presence) {
 }
 
 const isAdmin = (env, uuid) => (env.ADMINS || '').split(',').map(s => s.trim()).includes(uuid);
-const badgeFor = (env, uuid) => (isAdmin(env, uuid) ? 'owner' : 'vitra');
+const customBadge = (env, uuid) => (env.BADGES || '').split(',').map(s => s.trim().split(':')).find(([u]) => u === uuid)?.[1];
+const badgeFor = (env, uuid) => (isAdmin(env, uuid) ? 'owner' : customBadge(env, uuid) || 'vitra');
 
 const capeInfo = r => ({ id: r.id, url: `https://api.xan.gripe/v1/capes/${r.id}.png`, w: r.w, h: r.h, frames: r.frames, delay: r.delay });
 
@@ -269,6 +271,15 @@ async function putPreset(env, req, slug, b) {
      ON CONFLICT (slug) DO UPDATE SET name = ?2, cape = ?3, sort = ?4`
   ).bind(slug, String(b.title || slug), id, Number(b.sort) || 0).run();
   return json({ slug, id });
+}
+
+async function assignCape(env, req, uuid, b) {
+  if (!env.ADMIN_KEY || req.headers.get('x-admin-key') !== env.ADMIN_KEY) throw new HttpError(403, 'Not allowed.');
+  const user = await env.DB.prepare('SELECT uuid FROM users WHERE uuid = ?1').bind(uuid).first();
+  if (!user) throw new HttpError(404, 'That player has never used Vitra.');
+  const id = await storeCape(env, b, uuid);
+  await env.DB.prepare('UPDATE users SET cape = ?1 WHERE uuid = ?2').bind(id, uuid).run();
+  return json({ uuid, cape: id });
 }
 
 async function removeCape(env, uuid, b) {
