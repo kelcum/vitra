@@ -5,11 +5,16 @@
 <script>(()=>{const s=e=>{e.preventDefault();e.stopImmediatePropagation()};addEventListener("contextmenu",s,true);addEventListener("keydown",e=>{const c=e.code,m=e.ctrlKey||e.metaKey;if(e.key==="F12"||c==="F12"||(m&&e.shiftKey&&["KeyI","KeyJ","KeyC","KeyK"].includes(c))||(e.metaKey&&e.altKey&&["KeyI","KeyJ","KeyC","KeyU"].includes(c))||(m&&c==="KeyU"))s(e)},true);setInterval(()=>{const t=performance.now();debugger;if(performance.now()-t>200){document.documentElement.innerHTML="";location.replace("about:blank")}},1000)})()</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>k3</title>
-<meta name="description" content="xanax.pl: free browser tools, a Discord client mod, a cleanup toolkit and a Minecraft launcher.">
+<meta name="description" content="xanax.pl: free browser tools, a Discord client mod, a cleanup toolkit, a Minecraft launcher and a Roblox launcher.">
 <meta property="og:title" content="k3">
-<meta property="og:description" content="free browser tools, a discord client mod, a cleanup kit and a minecraft launcher">
+<meta property="og:description" content="free browser tools, a discord client mod, a cleanup kit, a minecraft launcher and a roblox launcher">
 <meta property="og:url" content="https://xan.gripe/k3">
 <meta property="og:type" content="profile">
+<meta property="og:image" content="https://xan.gripe/k3/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="An Evening with Mozart, tonight at xan.gripe">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0b0907">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%23120d08' stroke='%23d6b16a'/%3E%3Cg fill='none' stroke='%23ecd08f' stroke-width='1.5' stroke-linecap='round' transform='translate(4 4)'%3E%3Cpath d='M8 20C5 17 4 12 6 8 7 6 6 4 4.5 3.5M16 20c3-3 4-8 2-12-1-2 0-4 1.5-4.5M6.2 7.5h11.6M7.5 19.5Q12 22.5 16.5 19.5M10 7.5v12.6M12 7.5v13M14 7.5v12.6'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -446,6 +451,9 @@
   .frame-in { padding: 8px; background: #0d0905; box-shadow: inset 0 0 0 1px rgba(214, 177, 106, .4), inset 0 0 24px rgba(0, 0, 0, .9); }
   .frame img { display: block; width: 100%; height: auto; aspect-ratio: 1320 / 820; transition: opacity .3s ease, filter .3s ease; }
   .frame img.swap { opacity: 0; filter: blur(6px); }
+  .frame [hidden] { display: none !important; }
+  .frame video { display: block; width: 100%; height: auto; aspect-ratio: 1320 / 820; object-fit: contain; background: #000; }
+  .deadbolt .frame video { aspect-ratio: 16 / 9; }
   .plaque {
     position: absolute; left: 50%; bottom: -17px; translate: -50% 0; white-space: nowrap;
     padding: 6px 20px; border-radius: 3px; font: 600 10.5px var(--caps); letter-spacing: .26em; color: #2b1c08;
@@ -460,6 +468,9 @@
   .thumb img { display: block; width: 100%; aspect-ratio: 1320 / 820; object-fit: cover; }
   .thumb span { display: block; padding: 5px 0 6px; font: 500 9.5px var(--caps); letter-spacing: .18em; color: var(--ink-2); background: var(--coin-flat); }
   .thumb:hover { opacity: .85; transform: translateY(-2px); }
+  .vesper .frame img, .vesper .frame video, .vesper .thumb img { aspect-ratio: 1180 / 760; }
+  .vesper .thumbs { flex-wrap: wrap; }
+  .vesper .thumb { width: 82px; }
   .thumb[aria-pressed="true"] { opacity: 1; border-color: var(--gold); }
 
   .letter-wrap { display: grid; place-items: center; padding: 6px 0 70px; }
@@ -631,14 +642,23 @@
   .hint.show { opacity: 1; translate: -50% 0; }
   .hint b { margin-right: 10px; font: 600 11px var(--caps); letter-spacing: .22em; font-style: normal; color: var(--gold); }
 
+  @media (max-width: 1120px) {
+    .tab { padding: 9px 12px; }
+    .tab i { display: none; }
+  }
+  @media (max-width: 960px) {
+    .brand-name { display: none; }
+    .brand { padding-right: 2px; }
+    .tab { padding: 9px 10px; letter-spacing: .06em; }
+  }
   @media (max-width: 900px) {
     .feature { grid-template-columns: 1fr; gap: 40px; }
   }
   @media (max-width: 780px) {
     .bar { grid-template-columns: 1fr; padding: 6px; border-radius: 20px; }
     .brand, .actions { display: none; }
-    .tabs { justify-content: space-between; }
-    .tab { flex: 1; padding: 10px 4px; font-size: 12.5px; letter-spacing: .05em; }
+    .tabs { justify-content: space-between; min-width: 0; }
+    .tab { flex: 1 1 auto; padding: 10px 2px; font-size: clamp(10px, 2.8vw, 12.5px); letter-spacing: .03em; }
     .tab i { display: none; }
     main { padding-top: 96px; }
     .works { grid-template-columns: 1fr; }
@@ -718,8 +738,10 @@
     <span class="ink" aria-hidden="true"></span>
     <a class="tab" href="#overture" data-view="overture"><i>I</i>Overture</a>
     <a class="tab" href="#works" data-view="works"><i>II</i>Works</a>
-    <a class="tab" href="#vitra" data-view="vitra"><i>III</i>Vitra</a>
-    <a class="tab" href="#contact" data-view="contact"><i>IV</i>Contact</a>
+    <a class="tab" href="#deadbolt" data-view="deadbolt"><i>III</i>Deadbolt</a>
+    <a class="tab" href="#vitra" data-view="vitra"><i>IV</i>Vitra</a>
+    <a class="tab" href="#vesper" data-view="vesper"><i>V</i>Vesper</a>
+    <a class="tab" href="#contact" data-view="contact"><i>VI</i>Contact</a>
   </nav>
   <div class="actions">
     <button class="icon-btn" id="theme" type="button" aria-label="Switch to day">
@@ -767,9 +789,11 @@
       <div class="rule"><i></i></div>
       <ol>
         <li><a href="#works/sites"><span class="n">I.</span><b>Transmute</b><span class="dots"></span><em>Sites</em></a></li>
-        <li><a href="#works/discord"><span class="n">II.</span><b>Deadbolt</b><span class="dots"></span><em>Discord</em></a></li>
-        <li><a href="#works/tools"><span class="n">III.</span><b>VOID</b><span class="dots"></span><em>Tools</em></a></li>
-        <li><a href="#vitra"><span class="n">IV.</span><b>Vitra</b><span class="dots"></span><em>Minecraft</em></a></li>
+        <li><a href="#works/sites"><span class="n">II.</span><b>Peel</b><span class="dots"></span><em>Sites</em></a></li>
+        <li><a href="#deadbolt"><span class="n">III.</span><b>Deadbolt</b><span class="dots"></span><em>Discord</em></a></li>
+        <li><a href="#works/tools"><span class="n">IV.</span><b>VOID</b><span class="dots"></span><em>Tools</em></a></li>
+        <li><a href="#vitra"><span class="n">V.</span><b>Vitra</b><span class="dots"></span><em>Minecraft</em></a></li>
+        <li><a href="#vesper"><span class="n">VI.</span><b>Vesper</b><span class="dots"></span><em>Roblox</em></a></li>
       </ol>
       <a class="more" href="#works">The full programme <span class="arr">→</span></a>
     </div>
@@ -783,33 +807,34 @@
       <p class="rise" style="--d:3">Everything I've made, free to use. Take in the whole programme, or choose a section.</p>
     </div>
     <div class="filters rise" style="--d:4" role="group" aria-label="Filter works">
-      <button class="chip" type="button" data-filter="all" aria-pressed="true">All<sup>5</sup></button>
+      <button class="chip" type="button" data-filter="all" aria-pressed="true">All<sup>6</sup></button>
       <button class="chip" type="button" data-filter="sites" aria-pressed="false">Sites<sup>2</sup></button>
       <button class="chip" type="button" data-filter="discord" aria-pressed="false">Discord<sup>1</sup></button>
       <button class="chip" type="button" data-filter="tools" aria-pressed="false">Tools<sup>1</sup></button>
       <button class="chip" type="button" data-filter="minecraft" aria-pressed="false">Minecraft<sup>1</sup></button>
+      <button class="chip" type="button" data-filter="roblox" aria-pressed="false">Roblox<sup>1</sup></button>
     </div>
     <div class="works" id="works">
       <a class="work" data-cat="sites" href="/transmute/">
         <span class="work-no">No. I<em>Sites</em></span>
-        <span class="work-icon">T</span>
+        <span class="work-icon"><img src="/transmute/logo.svg" alt="" loading="lazy"></span>
         <h3><span>Transmute</span><span class="stars" data-repo="transmute"></span></h3>
         <p>Convert any file right in your browser. Nothing is ever uploaded.</p>
         <span class="work-go">Open <i>→</i></span>
       </a>
       <a class="work" data-cat="sites" href="/bg-remover/">
         <span class="work-no">No. II<em>Sites</em></span>
-        <span class="work-icon">P</span>
+        <span class="work-icon"><img src="/bg-remover/logo.svg" alt="" loading="lazy"></span>
         <h3><span>Peel</span><span class="stars" data-repo="bg-remover"></span></h3>
         <p>Remove backgrounds from photos and GIFs. The AI runs on your own device.</p>
         <span class="work-go">Open <i>→</i></span>
       </a>
-      <a class="work" data-cat="discord" href="https://github.com/kelcum/Deadbolt/releases/latest/download/DeadboltSetup.exe">
+      <a class="work" data-cat="discord" href="#deadbolt">
         <span class="work-no">No. III<em>Discord</em></span>
-        <span class="work-icon">D</span>
+        <span class="work-icon"><img src="/deadbolt/assets/crest.svg" alt="" loading="lazy" style="object-fit: contain; padding: 9px"></span>
         <h3><span>Deadbolt</span><span class="stars" data-repo="Deadbolt"></span></h3>
-        <p>My Discord client mod: more than 300 plugins, plus a few of my own.</p>
-        <span class="work-go">Download <i>→</i></span>
+        <p>My Discord client mod: more than 300 plugins, a few of my own, and badges you can design yourself.</p>
+        <span class="work-go">Discover <i>→</i></span>
       </a>
       <a class="work" data-cat="tools" href="https://github.com/kelcum/void">
         <span class="work-no">No. IV<em>Tools</em></span>
@@ -819,19 +844,57 @@
         <span class="work-go">View on GitHub <i>→</i></span>
       </a>
       <a class="work" data-cat="minecraft" href="#vitra">
-        <span class="work-no">No. V · Finale<em>Minecraft</em></span>
+        <span class="work-no">No. V<em>Minecraft</em></span>
         <span class="work-icon"><img src="/vitra/icon.png" alt="" loading="lazy"></span>
         <h3><span>Vitra</span></h3>
         <p>A liquid-glass Minecraft launcher: mods, servers, skins and free animated capes.</p>
         <span class="work-go">Discover <i>→</i></span>
       </a>
+      <a class="work" data-cat="roblox" href="#vesper">
+        <span class="work-no">No. VI · Finale<em>Roblox</em></span>
+        <span class="work-icon"><img src="/vesper/assets/brand/icon.svg" alt="" loading="lazy"></span>
+        <h3><span>Vesper</span></h3>
+        <p>A Roblox launcher with Fast Flags that still work, your picture as the emote wheel and custom cursors.</p>
+        <span class="work-go">Discover <i>→</i></span>
+      </a>
+    </div>
+  </section>
+
+  <section class="view" id="view-deadbolt" data-view="deadbolt" aria-label="Deadbolt">
+    <div class="feature deadbolt" data-name="Deadbolt">
+      <div>
+        <p class="eyebrow rise" style="--d:0">Movement III · Discord</p>
+        <h2 class="rise" style="--d:1">Deadbolt</h2>
+        <p class="lede rise" style="--d:2">A cold, no-frills Discord client mod.</p>
+        <ul class="ornate rise" style="--d:3">
+          <li><b>The whole Equicord library</b>, 300+ plugins from Equicord and Vencord</li>
+          <li><b>Its own boot splash</b>, an animated chrome crest and Deadbolt-branded quotes</li>
+          <li><b>Animated profile badges</b> that shimmer, each with a proper hover card</li>
+          <li><b>Design your own badge</b> with a live preview, right in Deadbolt's settings</li>
+          <li><b>/addplugin</b>: attach a file and Deadbolt saves it, rebuilds and offers to reload</li>
+          <li><b>macOS done properly</b>, so Discord.app is never modified</li>
+          <li><b>Heals itself on Windows</b> when Discord's updater resets mods</li>
+          <li><b>Small plugins that earn their spot</b>, like ConfirmMassMention and DoubleSendGuard</li>
+        </ul>
+        <div class="ctas rise" style="--d:4">
+          <a class="btn btn-gold" href="https://github.com/kelcum/Deadbolt/releases/latest/download/DeadboltSetup.exe">Download for Windows <span class="arr">↓</span></a>
+          <a class="btn btn-ghost" href="/deadbolt/">The full story</a>
+        </div>
+        <p class="meta rise" style="--d:5">Windows · macOS · Linux · GPL-3.0 open source</p>
+      </div>
+      <div class="rise" style="--d:2">
+        <figure class="frame">
+          <div class="frame-in"><video src="/k3/media/deadbolt.mp4" poster="/k3/media/deadbolt.jpg" controls playsinline preload="none" aria-label="Deadbolt launch film"></video></div>
+          <figcaption class="plaque">Deadbolt · Film</figcaption>
+        </figure>
+      </div>
     </div>
   </section>
 
   <section class="view" id="view-vitra" data-view="vitra" aria-label="Vitra">
-    <div class="feature">
+    <div class="feature" data-name="Vitra" data-shot="/vitra/shots/{s}-1x.webp" data-shot-hd="/vitra/shots/{s}.webp">
       <div>
-        <p class="eyebrow rise" style="--d:0">Movement III · Minecraft</p>
+        <p class="eyebrow rise" style="--d:0">Movement IV · Minecraft</p>
         <h2 class="rise" style="--d:1">Vitra</h2>
         <p class="lede rise" style="--d:2">A Minecraft launcher made of glass, composed for friends.</p>
         <ul class="ornate rise" style="--d:3">
@@ -850,11 +913,12 @@
       </div>
       <div class="rise" style="--d:2">
         <figure class="frame" id="frame">
-          <div class="frame-in"><img id="shot" src="/vitra/shots/home-1x.webp" srcset="/vitra/shots/home-1x.webp 1x, /vitra/shots/home.webp 2x" alt="Vitra's home screen" width="1320" height="820" loading="lazy"></div>
-          <figcaption class="plaque" id="plaque">Vitra · Home</figcaption>
+          <div class="frame-in"><video src="/k3/media/vitra.mp4" poster="/k3/media/vitra.jpg" controls playsinline preload="none" aria-label="Vitra launch film"></video><img id="shot" src="/vitra/shots/home-1x.webp" srcset="/vitra/shots/home-1x.webp 1x, /vitra/shots/home.webp 2x" alt="Vitra's home screen" width="1320" height="820" loading="lazy" hidden></div>
+          <figcaption class="plaque" id="plaque">Vitra · Film</figcaption>
         </figure>
         <div class="thumbs" role="group" aria-label="Screenshots">
-          <button class="thumb" type="button" data-shot="home" data-label="Home" aria-pressed="true"><img src="/vitra/shots/home-1x.webp" alt="" loading="lazy"><span>Home</span></button>
+          <button class="thumb" type="button" data-video data-label="Film" aria-pressed="true"><img src="/k3/media/vitra-thumb.jpg" alt="" loading="lazy"><span>Film</span></button>
+          <button class="thumb" type="button" data-shot="home" data-label="Home" aria-pressed="false"><img src="/vitra/shots/home-1x.webp" alt="" loading="lazy"><span>Home</span></button>
           <button class="thumb" type="button" data-shot="servers" data-label="Servers" aria-pressed="false"><img src="/vitra/shots/servers-1x.webp" alt="" loading="lazy"><span>Servers</span></button>
           <button class="thumb" type="button" data-shot="skins" data-label="Skins" aria-pressed="false"><img src="/vitra/shots/skins-1x.webp" alt="" loading="lazy"><span>Skins</span></button>
           <button class="thumb" type="button" data-shot="instance" data-label="Instance" aria-pressed="false"><img src="/vitra/shots/instance-1x.webp" alt="" loading="lazy"><span>Instance</span></button>
@@ -863,9 +927,50 @@
     </div>
   </section>
 
+  <section class="view" id="view-vesper" data-view="vesper" aria-label="Vesper">
+    <div class="feature vesper" data-name="Vesper" data-shot="/vesper/shots/{s}.webp">
+      <div>
+        <p class="eyebrow rise" style="--d:0">Movement V · Roblox</p>
+        <h2 class="rise" style="--d:1">Vesper</h2>
+        <p class="lede rise" style="--d:2">A Roblox launcher, tuned and verified, for evenings in game.</p>
+        <ul class="ornate rise" style="--d:3">
+          <li><b>Fast Flags Roblox still accepts</b>, explained, and checked against Roblox's own log after every launch</li>
+          <li><b>Your picture as the emote wheel</b>, cut into a circle with Roblox's slots on top</li>
+          <li><b>Cursors in any colour and size</b>, Shift Lock included, plus your own font, death sound and sky</li>
+          <li><b>Now playing and recent games</b>, with the server's city and one click back into the same server</li>
+          <li><b>Lowest-ping servers</b>, or one in the region you pick</li>
+          <li><b>Shaders</b> on Windows, without loading anything into Roblox</li>
+          <li><b>Profiles</b> for competitive play, quality or older PCs, with a real frame-rate limit</li>
+          <li><b>Discord Rich Presence</b> with your game and a Join button, off until you turn it on</li>
+          <li><b>Updates itself</b>, signed so only genuine versions install</li>
+        </ul>
+        <div class="ctas rise" style="--d:4">
+          <a class="btn btn-gold" href="/vesper/download/Vesper_0.3.4_x64-setup.exe" download>Download for Windows <span class="arr">↓</span></a>
+          <a class="btn btn-gold" href="/vesper/download/Vesper_0.3.4_universal.dmg" download>Download for Mac <span class="arr">↓</span></a>
+          <a class="btn btn-ghost" href="/vesper/">The full story</a>
+        </div>
+        <p class="meta rise" style="--d:5">Version 0.3.4 · 4.4 MB · Windows 10 &amp; 11 · macOS 11+</p>
+      </div>
+      <div class="rise" style="--d:2">
+        <figure class="frame">
+          <div class="frame-in"><video src="/k3/media/vesper.mp4" poster="/k3/media/vesper.jpg" controls playsinline preload="none" aria-label="Vesper launch film"></video><img src="/vesper/shots/home.webp" alt="Vesper's home screen" width="1180" height="760" loading="lazy" hidden></div>
+          <figcaption class="plaque">Vesper · Film</figcaption>
+        </figure>
+        <div class="thumbs" role="group" aria-label="Screenshots">
+          <button class="thumb" type="button" data-video data-label="Film" aria-pressed="true"><img src="/k3/media/vesper-thumb.jpg" alt="" loading="lazy"><span>Film</span></button>
+          <button class="thumb" type="button" data-shot="home" data-label="Home" aria-pressed="false"><img src="/vesper/shots/home.webp" alt="" loading="lazy"><span>Home</span></button>
+          <button class="thumb" type="button" data-shot="recent" data-label="Recent games" aria-pressed="false"><img src="/vesper/shots/recent.webp" alt="" loading="lazy"><span>Recent</span></button>
+          <button class="thumb" type="button" data-shot="fast-flags" data-label="Fast Flags" aria-pressed="false"><img src="/vesper/shots/fast-flags.webp" alt="" loading="lazy"><span>Flags</span></button>
+          <button class="thumb" type="button" data-shot="customize" data-label="Customize" aria-pressed="false"><img src="/vesper/shots/customize.webp" alt="" loading="lazy"><span>Customize</span></button>
+          <button class="thumb" type="button" data-shot="shaders" data-label="Shaders" aria-pressed="false"><img src="/vesper/shots/shaders.webp" alt="" loading="lazy"><span>Shaders</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="view" id="view-contact" data-view="contact" aria-label="Contact">
     <div class="head">
-      <p class="eyebrow rise" style="--d:0">Movement IV</p>
+      <p class="eyebrow rise" style="--d:0">Movement VI</p>
       <h2 class="rise" style="--d:1">Correspondence</h2>
       <div class="rule rise" style="--d:2"><i></i></div>
     </div>
@@ -880,6 +985,11 @@
             <span><b>Discord</b><span>xanax.pl</span></span>
             <span class="act" data-label="copy the name">copy the name</span>
           </button>
+          <a class="channel" href="https://discord.gg/x4n" rel="noopener">
+            <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.8 19.8 0 0015.4 3l-.6 1.3a18.3 18.3 0 00-5.6 0L8.6 3a19.7 19.7 0 00-4.9 1.4C.5 9 -.3 13.6.1 18.1a19.9 19.9 0 006 3l1.3-2.1c-.7-.3-1.4-.6-2-1l.5-.4a14.2 14.2 0 0012.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.9 19.9 0 006-3c.5-5.2-.8-9.7-3.6-13.7zM8 15.4c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.6 8 10.6s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg></span>
+            <span><b>Discord server</b><span>xan.gripe · updates, ideas &amp; help</span></span>
+            <span class="act">join →</span>
+          </a>
           <a class="channel" href="https://www.instagram.com/xan.pl/" rel="me">
             <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.2c3.2 0 3.6 0 4.8.1 3.3.1 4.8 1.7 4.9 4.9.1 1.3.1 1.6.1 4.8s0 3.6-.1 4.8c-.1 3.2-1.7 4.8-4.9 4.9-1.3.1-1.6.1-4.8.1s-3.6 0-4.8-.1c-3.3-.1-4.8-1.7-4.9-4.9C2.2 15.6 2.2 15.2 2.2 12s0-3.6.1-4.8C2.4 3.9 3.9 2.4 7.2 2.3 8.4 2.2 8.8 2.2 12 2.2zM12 0C8.7 0 8.3 0 7.1.1 2.7.3.3 2.7.1 7.1 0 8.3 0 8.7 0 12s0 3.7.1 4.9c.2 4.4 2.6 6.8 7 7C8.3 24 8.7 24 12 24s3.7 0 4.9-.1c4.4-.2 6.8-2.6 7-7 .1-1.2.1-1.6.1-4.9s0-3.7-.1-4.9c-.2-4.4-2.6-6.8-7-7C15.7 0 15.3 0 12 0zm0 5.8a6.2 6.2 0 100 12.4 6.2 6.2 0 000-12.4zM12 16a4 4 0 110-8 4 4 0 010 8zm6.4-11.8a1.4 1.4 0 100 2.9 1.4 1.4 0 000-2.9z"/></svg></span>
             <span><b>Instagram</b><span>@xan.pl</span></span>
@@ -1046,7 +1156,7 @@
     $('#name-ink').addEventListener('animationend', e => { if (e.animationName === 'ink-out') $('#crest').classList.add('inked'); });
   })();
 
-  const TITLES = { overture: 'k3', works: 'The Programme', vitra: 'Vitra', contact: 'Correspondence' };
+  const TITLES = { overture: 'k3', works: 'The Programme', vitra: 'Vitra', vesper: 'Vesper', contact: 'Correspondence' };
   const views = Object.fromEntries($$('.view').map(v => [v.dataset.view, v]));
   const tabs = $$('.tab'), ink = $('.ink');
   let current = null, switching = 0;
@@ -1144,29 +1254,41 @@
     $$('.stars[data-repo]').forEach(el => { const n = stars[el.dataset.repo.toLowerCase()]; if (n > 0) el.textContent = '★ ' + n; });
   }).catch(() => {});
 
-  (function gallery() {
-    const img = $('#shot'), plaque = $('#plaque'), frame = $('#frame'), thumbs = $$('.thumb');
+  $$('.feature').forEach(function gallery(root) {
+    const img = root.querySelector('.frame img'), plaque = root.querySelector('.plaque'), frame = root.querySelector('.frame');
+    const thumbs = [...root.querySelectorAll('.thumb')], name = root.dataset.name, film = root.querySelector('.frame video');
+    if (!img || !thumbs.length) return;
+    const url = (pattern, s) => pattern.replace('{s}', s);
     thumbs.forEach(t => t.addEventListener('click', () => {
       if (t.getAttribute('aria-pressed') === 'true') return;
       thumbs.forEach(x => x.setAttribute('aria-pressed', x === t));
+      if (film) {
+        const on = 'video' in t.dataset;
+        if (!on) film.pause();
+        film.hidden = !on;
+        img.hidden = on;
+        if (on) { plaque.textContent = name + ' · ' + t.dataset.label; return; }
+      }
       img.classList.add('swap');
       setTimeout(() => {
-        const s = t.dataset.shot;
-        img.srcset = `/vitra/shots/${s}-1x.webp 1x, /vitra/shots/${s}.webp 2x`;
-        img.src = `/vitra/shots/${s}-1x.webp`;
-        img.alt = `Vitra's ${t.dataset.label.toLowerCase()} screen`;
-        plaque.textContent = 'Vitra · ' + t.dataset.label;
+        const s = t.dataset.shot, one = url(root.dataset.shot, s);
+        if (root.dataset.shotHd) img.srcset = `${one} 1x, ${url(root.dataset.shotHd, s)} 2x`;
+        img.src = one;
+        img.alt = `${name}'s ${t.dataset.label.toLowerCase()} screen`;
+        plaque.textContent = name + ' · ' + t.dataset.label;
         (img.decode ? img.decode() : Promise.resolve()).catch(() => {}).finally(() => img.classList.remove('swap'));
       }, 300);
     }));
     if (!fine || reduced) return;
     frame.addEventListener('pointermove', e => {
+      if (film && !film.hidden) return;
       const r = frame.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
       frame.classList.add('tilting');
       frame.style.transform = `perspective(1400px) rotateY(${(x * 7).toFixed(2)}deg) rotateX(${(-y * 5).toFixed(2)}deg)`;
     });
     frame.addEventListener('pointerleave', () => { frame.classList.remove('tilting'); frame.style.transform = ''; });
-  })();
+  });
+  $$('.frame video').forEach(v => v.addEventListener('play', () => document.getElementById('song').pause()));
 
   if (fine && !reduced) cards.forEach(c => c.addEventListener('pointermove', e => {
     const r = c.getBoundingClientRect();
