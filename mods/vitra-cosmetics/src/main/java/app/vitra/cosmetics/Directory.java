@@ -7,7 +7,6 @@ import com.google.gson.JsonParser;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
-import net.minecraft.client.multiplayer.ServerData;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -34,7 +33,6 @@ public final class Directory {
     private static final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
     private static volatile boolean tokenWorks = !VitraCosmetics.TOKEN.isEmpty();
     private static long lastPing;
-    private static String lastPlace = "";
 
     private Directory() {}
 
@@ -75,11 +73,6 @@ public final class Directory {
     }
 
     private static void tick() throws Exception {
-        String place = Minecraft.getInstance().submit(Directory::place).get(5, TimeUnit.SECONDS);
-        if (!place.equals(lastPlace)) {
-            lastPlace = place;
-            VitraCosmetics.LOG.info("Vitra presence: {}", place);
-        }
         List<UUID> around = Minecraft.getInstance().submit(Directory::playersAround).get(5, TimeUnit.SECONDS);
         long now = System.currentTimeMillis();
         if (tokenWorks && now - lastPing > PING_MS) {
@@ -103,15 +96,6 @@ public final class Directory {
         if (unknown.isEmpty()) return;
         JsonObject res = post("/v1/lookup", unknown, tokenWorks);
         if (res != null) store(unknown, res, now);
-    }
-
-    private static String place() {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.getConnection() == null) return "menu";
-        if (mc.getSingleplayerServer() != null) return "world";
-        ServerData server = mc.getCurrentServer();
-        if (server == null) return "world";
-        return server.isRealm() ? "realms" : "server " + server.ip;
     }
 
     private static List<UUID> playersAround() {

@@ -128,12 +128,18 @@ async fn game_token(state: &AppState, identity: &Identity) -> Result<String> {
 }
 
 pub async fn launch_args(state: &AppState, inst: &Instance, identity: &Identity) -> Vec<String> {
-    if !state.settings().cosmetics || inst.loader != "fabric" {
+    let settings = state.settings();
+    if !(settings.cosmetics || settings.memories) || inst.loader != "fabric" {
         return vec![];
     }
     let Some(jar) = mod_jar(state, &inst.game_version) else { return vec![] };
     let mut args = vec![format!("-Dfabric.addMods={}", jar.display())];
-    if !identity.demo {
+    if settings.memories {
+        args.push("-Dvitra.moments=true".into());
+    }
+    if !settings.cosmetics {
+        args.push("-Dvitra.cosmetics.off=true".into());
+    } else if !identity.demo {
         match game_token(state, identity).await {
             Ok(token) => args.push(format!("-Dvitra.cosmetics.token={token}")),
             Err(e) => log::warn!("Vitra badge is off for this session: {e}"),

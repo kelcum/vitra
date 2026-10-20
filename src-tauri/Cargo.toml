@@ -1,6 +1,6 @@
 [package]
 name = "vitra"
-version = "0.1.6"
+version = "0.1.8"
 description = "Vitra — a fast, beautiful Minecraft launcher"
 edition = "2024"
 
