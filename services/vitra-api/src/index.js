@@ -22,6 +22,7 @@ const BADGE_EFFECTS = ['shine', 'glint', 'pulse', 'float', 'spin'];
 const MAX_BADGE_COLORS = 4;
 const BADGE_REQUESTS_PER_HOUR = 3;
 const BADGE_REQUESTS_PER_DAY = 8;
+const BADGE_TESTER_PER_HOUR = 100;
 const BADGE_STATUSES = ['new', 'approved', 'denied', 'done'];
 
 class HttpError extends Error {
@@ -374,13 +375,15 @@ async function submitBadgeRequest(env, req, b) {
   const design = cleanDesign(b.design);
   const now = Date.now();
   const ip = await sha256hex(`badge|${req.headers.get('cf-connecting-ip') || 'unknown'}|${env.TOKEN_SECRET || ''}`);
+  const tester = (env.BADGE_TESTERS || '').split(',').map(s => s.trim()).includes(discordId);
   const recent = await env.DB.prepare(
     'SELECT COALESCE(SUM(created > ?2), 0) AS hour, COUNT(*) AS day FROM badge_requests WHERE ip = ?1 AND created > ?3'
   ).bind(ip, now - 3600000, now - 86400000).first();
-  if (recent.hour >= BADGE_REQUESTS_PER_HOUR || recent.day >= BADGE_REQUESTS_PER_DAY) {
+  const [perHour, perDay] = tester ? [BADGE_TESTER_PER_HOUR, BADGE_TESTER_PER_HOUR * 24] : [BADGE_REQUESTS_PER_HOUR, BADGE_REQUESTS_PER_DAY];
+  if (recent.hour >= perHour || recent.day >= perDay) {
     throw new HttpError(429, "You've sent a few already. Give it a while and try again.");
   }
-  const waiting = await env.DB.prepare("SELECT id FROM badge_requests WHERE discord = ?1 AND status = 'new' AND created > ?2 LIMIT 1")
+  const waiting = tester ? null : await env.DB.prepare("SELECT id FROM badge_requests WHERE discord = ?1 AND status = 'new' AND created > ?2 LIMIT 1")
     .bind(discordId, now - 14 * 86400000).first();
   if (waiting) throw new HttpError(409, "There's already a request waiting for that account. Hang tight.");
   const id = [...crypto.getRandomValues(new Uint8Array(8))].map(x => x.toString(16).padStart(2, '0')).join('');
