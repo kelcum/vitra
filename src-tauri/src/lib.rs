@@ -1,5 +1,6 @@
 mod auth;
 mod capture;
+mod clips;
 mod content;
 mod cosmetics;
 mod discord;
@@ -57,6 +58,7 @@ pub fn run() {
             let root = app.path().app_data_dir()?;
             let state = AppState::new(app.handle().clone(), root)?;
             allow_asset_dirs(&state);
+            let _ = std::fs::remove_dir_all(state.cache_dir().join("clips"));
             presence::start(state.clone());
             app.manage::<Arc<AppState>>(state);
             Ok(())
@@ -98,6 +100,7 @@ pub fn run() {
             memories::list_memories,
             memories::set_memory_favorite,
             memories::delete_memory,
+            memories::delete_memory_clip,
             memories::reveal_memory,
             java::list_java,
             java::inspect_java,

@@ -39,6 +39,7 @@ export const api = {
   setMemoryFavorite: (id: string, favorite: boolean) => invoke<T.Memory>("set_memory_favorite", { id, favorite }),
   deleteMemory: (id: string) => invoke<void>("delete_memory", { id }),
   revealMemory: (id: string) => invoke<void>("reveal_memory", { id }),
+  deleteMemoryClip: (id: string) => invoke<T.Memory>("delete_memory_clip", { id }),
 
   listJava: () => invoke<T.JavaInstall[]>("list_java"),
   inspectJava: (path: string) => invoke<T.JavaInstall>("inspect_java", { path }),

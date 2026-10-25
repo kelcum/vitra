@@ -61,7 +61,7 @@ pub fn jpeg(frame: &Frame, quality: u8) -> Option<Vec<u8>> {
 }
 
 #[cfg(windows)]
-mod imp {
+pub(crate) mod imp {
     use std::time::{Duration, Instant};
 
     use windows::core::{BOOL, Interface};
@@ -112,7 +112,7 @@ mod imp {
         true.into()
     }
 
-    fn find_window(pid: u32) -> Option<HWND> {
+    pub(crate) fn find_window(pid: u32) -> Option<HWND> {
         let mut search = Search { pid, best: None, area: 0 };
         let _ = unsafe { EnumWindows(Some(visit), LPARAM(&mut search as *mut Search as isize)) };
         search.best
@@ -133,7 +133,7 @@ mod imp {
         }
     }
 
-    fn client_area(hwnd: HWND, width: u32, height: u32) -> (u32, u32, u32, u32) {
+    pub(crate) fn client_area(hwnd: HWND, width: u32, height: u32) -> (u32, u32, u32, u32) {
         let mut frame = RECT::default();
         let mut client = RECT::default();
         let mut origin = POINT::default();

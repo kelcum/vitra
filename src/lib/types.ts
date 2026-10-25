@@ -29,6 +29,10 @@ export interface Settings {
   discordShowServer: boolean;
   memories: boolean;
   memoriesEveryAdvancement: boolean;
+  clips: boolean;
+  clipSeconds: number;
+  clipQuality: "720p" | "1080p";
+  clipsMaxMb: number;
   notifications: { downloads: boolean; crashes: boolean; gameUpdates: boolean };
   gameDataDir: string | null;
   downloadConcurrency: number;
@@ -81,6 +85,8 @@ export interface Memory {
   favorite: boolean;
   image?: string;
   thumb?: string;
+  clip?: string;
+  clipBytes?: number;
 }
 
 export interface WindowSettings {

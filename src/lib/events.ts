@@ -121,6 +121,7 @@ export async function wireEvents() {
     newMemories.set(payload.instanceId, [...(newMemories.get(payload.instanceId) ?? []), payload]);
     useMemoryVersion.getState().bump();
   });
+  await listen<Memory>("memory://updated", () => useMemoryVersion.getState().bump());
   await listen("instances://changed", () => useInstances.getState().refresh());
   await listen<Settings>("settings://changed", ({ payload }) => useSettings.getState().external(payload));
 
