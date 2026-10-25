@@ -42,7 +42,26 @@ export interface Settings {
   onboarded: boolean;
 }
 
-export type MemoryCategory = "treasure" | "nether" | "end" | "boss" | "milestone" | "adventure" | "challenge" | "advancement";
+export type MemoryCategory =
+  | "treasure"
+  | "nether"
+  | "end"
+  | "boss"
+  | "biome"
+  | "mob"
+  | "milestone"
+  | "adventure"
+  | "challenge"
+  | "advancement";
+
+export interface MemorySpot {
+  dimension: string;
+  biome: string | null;
+  biomeName: string | null;
+  x: number;
+  y: number;
+  z: number;
+}
 
 export interface Memory {
   id: string;
@@ -58,6 +77,7 @@ export interface Memory {
   description: string;
   advancement: string;
   advancementId: string | null;
+  spot?: MemorySpot | null;
   favorite: boolean;
   image?: string;
   thumb?: string;

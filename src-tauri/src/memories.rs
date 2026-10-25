@@ -54,6 +54,54 @@ const MOMENTS: &[(&str, &str, &str, &str)] = &[
     ("adventure.minecraft_trials_edition", "adventure", "Trial chambers", "You stepped into the trial chambers."),
 ];
 
+const BIOMES: &[(&str, &str, &str)] = &[
+    ("mushroom_fields", "Mushroom island", "You set foot on a mushroom island."),
+    ("cherry_grove", "Cherry grove", "You walked into a cherry grove."),
+    ("ice_spikes", "Ice spikes", "You found the ice spikes."),
+    ("badlands", "The badlands", "You reached the badlands."),
+    ("eroded_badlands", "Eroded badlands", "You found the eroded badlands."),
+    ("bamboo_jungle", "Bamboo jungle", "You pushed into a bamboo jungle."),
+    ("mangrove_swamp", "Mangrove swamp", "You waded into a mangrove swamp."),
+    ("deep_dark", "The Deep Dark", "You went down into the Deep Dark."),
+    ("lush_caves", "Lush caves", "You found lush caves."),
+    ("pale_garden", "Pale garden", "You wandered into a pale garden."),
+    ("jagged_peaks", "Jagged peaks", "You climbed the jagged peaks."),
+    ("flower_forest", "Flower forest", "You found a flower forest."),
+    ("warm_ocean", "Warm ocean", "You found a warm ocean."),
+    ("crimson_forest", "Crimson forest", "You found a crimson forest."),
+    ("warped_forest", "Warped forest", "You found a warped forest."),
+    ("soul_sand_valley", "Soul sand valley", "You crossed a soul sand valley."),
+    ("basalt_deltas", "Basalt deltas", "You found the basalt deltas."),
+];
+
+const MOBS: &[(&str, &str, &str)] = &[
+    ("minecraft:warden", "The Warden", "You came face to face with the Warden."),
+    ("minecraft:elder_guardian", "An elder guardian", "You spotted an elder guardian."),
+    ("minecraft:piglin_brute", "A piglin brute", "You ran into a piglin brute."),
+    ("minecraft:evoker", "An evoker", "You met an evoker."),
+    ("minecraft:illusioner", "An illusioner", "You saw an illusioner, one of the rarest mobs."),
+    ("minecraft:ravager", "A ravager", "A ravager charged into view."),
+    ("minecraft:allay", "An allay", "You found an allay."),
+    ("minecraft:sniffer", "A sniffer", "You met a sniffer."),
+    ("minecraft:creaking", "A creaking", "You saw a creaking."),
+    ("minecraft:skeleton_horse", "A skeleton horse", "You saw a skeleton horse."),
+    ("minecraft:axolotl/blue", "A blue axolotl", "You found a blue axolotl, about one in 1,200."),
+    ("minecraft:sheep/pink", "A pink sheep", "You spotted a pink sheep."),
+    ("minecraft:panda/brown", "A brown panda", "You found a brown panda."),
+    ("minecraft:mooshroom/brown", "A brown mooshroom", "You found a brown mooshroom."),
+];
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Spot {
+    pub dimension: String,
+    pub biome: Option<String>,
+    pub biome_name: Option<String>,
+    pub x: i64,
+    pub y: i64,
+    pub z: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Memory {
@@ -70,6 +118,8 @@ pub struct Memory {
     pub description: String,
     pub advancement: String,
     pub advancement_id: Option<String>,
+    #[serde(default)]
+    pub spot: Option<Spot>,
     pub favorite: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
@@ -278,6 +328,16 @@ pub struct Watcher {
     patterns: Arc<OnceLock<Patterns>>,
     place: Place,
     seen: HashSet<String>,
+    mod_reports: bool,
+}
+
+struct Found {
+    category: String,
+    title: String,
+    description: String,
+    advancement: String,
+    advancement_id: Option<String>,
+    spot: Option<Spot>,
 }
 
 impl Watcher {
@@ -288,12 +348,25 @@ impl Watcher {
         tauri::async_runtime::spawn_blocking(move || {
             let _ = p.set(load_patterns(&g.client_jar, &assets, &g.asset_index, &g.game_dir));
         });
-        Self { state, game, patterns, place: Place::Menu, seen: HashSet::new() }
+        Self { state, game, patterns, place: Place::Menu, seen: HashSet::new(), mod_reports: false }
     }
 
     pub fn line(&mut self, text: &str) {
+        if let Some((_, json)) = text.split_once("Vitra moment: ") {
+            if let Ok(report) = serde_json::from_str::<serde_json::Value>(json.trim()) {
+                self.reported(&report);
+            }
+            return;
+        }
+        if text.contains("Vitra moments: ready") {
+            self.mod_reports = true;
+            return;
+        }
         if let Some(place) = place_from_log(text) {
             self.place = place;
+            return;
+        }
+        if self.mod_reports {
             return;
         }
         let Some((_, chat)) = text.split_once("[CHAT] ") else { return };
@@ -302,23 +375,63 @@ impl Watcher {
         if !is_player(player, &self.game.player) {
             return;
         }
+        let id = patterns.ids.get(shown).cloned();
+        let description = id.as_ref().and_then(|i| patterns.descriptions.get(i)).cloned();
+        self.advancement(id, frame, shown.to_string(), description, None);
+    }
+
+    fn advancement(&mut self, id: Option<String>, frame: Frame, shown: String, description: Option<String>, spot: Option<Spot>) {
         let settings = self.state.settings();
-        if !settings.memories || !self.seen.insert(shown.to_string()) {
+        if !settings.memories || !self.seen.insert(id.clone().unwrap_or_else(|| shown.clone())) {
             return;
         }
-        let id = patterns.ids.get(shown).cloned();
-        let description = id.as_ref().and_then(|i| patterns.descriptions.get(i)).map(String::as_str);
-        let Some((category, title, description)) = moment(id.as_deref(), frame, shown, description, settings.memories_every_advancement) else {
+        let Some((category, title, description)) =
+            moment(id.as_deref(), frame, &shown, description.as_deref(), settings.memories_every_advancement)
+        else {
             return;
         };
-        let (world, server) = match &self.place {
+        self.keep(Found { category, title, description, advancement: shown, advancement_id: id, spot });
+    }
+
+    fn reported(&mut self, r: &serde_json::Value) {
+        let settings = self.state.settings();
+        match read_report(r, settings.memories_every_advancement) {
+            Some(Report::Advancement { id, frame, shown, description, spot }) => self.advancement(Some(id), frame, shown, description, spot),
+            Some(Report::Biome(found)) if settings.memories => self.keep(found),
+            Some(Report::Mob(found)) if settings.memories => {
+                if let Some(kind) = &found.advancement_id
+                    && first_sighting(&self.state, &self.world_key(), kind)
+                {
+                    self.keep(found);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn world_and_server(&self) -> (Option<String>, Option<String>) {
+        match &self.place {
             Place::World => (open_world(&self.game.game_dir, self.game.started_at), None),
             Place::Server(address) if !address.is_empty() => {
                 (None, Some(crate::servers::name_for(&self.state, address).unwrap_or_else(|| address.clone())))
             }
             Place::Server(_) => (None, Some("Realms".to_string())),
             Place::Menu => (None, None),
-        };
+        }
+    }
+
+    fn world_key(&self) -> String {
+        match &self.place {
+            Place::Server(address) => format!("server:{}", address.to_lowercase()),
+            _ => match open_world(&self.game.game_dir, self.game.started_at) {
+                Some(world) => format!("world:{}/{world}", self.game.instance.id),
+                None => format!("instance:{}", self.game.instance.id),
+            },
+        }
+    }
+
+    fn keep(&self, found: Found) {
+        let (world, server) = self.world_and_server();
         let now = chrono::Local::now();
         let memory = Memory {
             id: format!("{}-{}", now.format("%Y%m%d-%H%M%S"), &uuid::Uuid::new_v4().simple().to_string()[..6]),
@@ -329,11 +442,12 @@ impl Watcher {
             loader: self.game.instance.loader.clone(),
             world,
             server,
-            category,
-            title,
-            description,
-            advancement: shown.to_string(),
-            advancement_id: id,
+            category: found.category,
+            title: found.title,
+            description: found.description,
+            advancement: found.advancement,
+            advancement_id: found.advancement_id,
+            spot: found.spot,
             favorite: false,
             image: None,
             thumb: None,
@@ -352,6 +466,82 @@ impl Watcher {
             }
         });
     }
+}
+
+enum Report {
+    Advancement { id: String, frame: Frame, shown: String, description: Option<String>, spot: Option<Spot> },
+    Biome(Found),
+    Mob(Found),
+}
+
+fn read_report(r: &serde_json::Value, every: bool) -> Option<Report> {
+    let text = |k: &str| r[k].as_str().map(str::to_string);
+    let id = text("id")?;
+    let spot = r["dimension"].as_str().map(|dimension| Spot {
+        dimension: dimension.to_string(),
+        biome: text("biome"),
+        biome_name: text("biomeName"),
+        x: r["x"].as_i64().unwrap_or_default(),
+        y: r["y"].as_i64().unwrap_or_default(),
+        z: r["z"].as_i64().unwrap_or_default(),
+    });
+    match r["kind"].as_str()? {
+        "advancement" => Some(Report::Advancement {
+            frame: match r["frame"].as_str() {
+                Some("challenge") => Frame::Challenge,
+                Some("goal") => Frame::Goal,
+                _ => Frame::Task,
+            },
+            shown: text("title").unwrap_or_else(|| id.clone()),
+            description: text("description"),
+            id: advancement_key(&id),
+            spot,
+        }),
+        "biome" => {
+            let name = text("name").unwrap_or_else(|| id.clone());
+            let (title, description) = match BIOMES.iter().find(|b| id.strip_prefix("minecraft:") == Some(b.0)) {
+                Some((_, title, description)) => (title.to_string(), description.to_string()),
+                None if every => (name.clone(), format!("Your first time in {name}.")),
+                None => return None,
+            };
+            Some(Report::Biome(Found { category: "biome".into(), title, description, advancement: name, advancement_id: Some(id), spot }))
+        }
+        "mob" => {
+            let (_, title, description) = MOBS.iter().find(|m| m.0 == id)?;
+            Some(Report::Mob(Found {
+                category: "mob".into(),
+                title: title.to_string(),
+                description: description.to_string(),
+                advancement: text("name").unwrap_or_else(|| title.to_string()),
+                advancement_id: Some(id),
+                spot,
+            }))
+        }
+        _ => None,
+    }
+}
+
+fn advancement_key(id: &str) -> String {
+    match id.strip_prefix("minecraft:") {
+        Some(path) => path.replace('/', "."),
+        None => id.replace('/', "."),
+    }
+}
+
+fn first_sighting(state: &AppState, world: &str, kind: &str) -> bool {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let path = dir(state).join("sightings.json");
+    let mut all: HashMap<String, Vec<String>> = util::read_json(&path).unwrap_or_default();
+    let seen = all.entry(world.to_string()).or_default();
+    if seen.iter().any(|k| k == kind) {
+        return false;
+    }
+    seen.push(kind.to_string());
+    if let Err(e) = util::write_json(&path, &all) {
+        log::warn!("Couldn't note a sighting: {e}");
+    }
+    true
 }
 
 fn open_world(game_dir: &Path, since: i64) -> Option<String> {
@@ -422,7 +612,7 @@ pub fn list_memories(state: State<'_, Arc<AppState>>) -> Vec<Memory> {
         .into_iter()
         .flatten()
         .flatten()
-        .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+        .filter(|e| e.path().extension().is_some_and(|x| x == "json") && e.file_name() != "sightings.json")
         .filter_map(|e| util::read_json::<Memory>(&e.path()).ok())
         .map(|m| with_files(&dir, m))
         .collect();
@@ -520,6 +710,32 @@ mod tests {
         assert_eq!((stone.0.as_str(), stone.1.as_str(), stone.2.as_str()), ("advancement", "Stone Age", "Mine Stone"));
         assert_eq!(moment(None, Frame::Challenge, "Sky Pirate", None, false).unwrap().0, "challenge");
         assert!(moment(None, Frame::Goal, "Some mod goal", None, false).is_none());
+    }
+
+    #[test]
+    fn reads_the_mods_reports() {
+        let line = r#"{"kind":"advancement","id":"minecraft:story/mine_diamond","frame":"task","title":"Diamonds!","description":"Acquire diamonds","dimension":"minecraft:overworld","biome":"minecraft:dripstone_caves","biomeName":"Dripstone Caves","x":12,"y":-58,"z":-340}"#;
+        let Some(Report::Advancement { id, frame, shown, spot, .. }) = read_report(&serde_json::from_str(line).unwrap(), false) else {
+            panic!("not an advancement")
+        };
+        assert_eq!((id.as_str(), frame, shown.as_str()), ("story.mine_diamond", Frame::Task, "Diamonds!"));
+        let spot = spot.unwrap();
+        assert_eq!((spot.x, spot.y, spot.z, spot.biome_name.as_deref()), (12, -58, -340, Some("Dripstone Caves")));
+
+        let biome = |id: &str, every| read_report(&serde_json::json!({ "kind": "biome", "id": id, "name": "Somewhere" }), every);
+        let Some(Report::Biome(cherry)) = biome("minecraft:cherry_grove", false) else { panic!("cherry grove") };
+        assert_eq!((cherry.title.as_str(), cherry.spot), ("Cherry grove", None));
+        assert!(biome("minecraft:plains", false).is_none());
+        let Some(Report::Biome(plains)) = biome("minecraft:plains", true) else { panic!("plains") };
+        assert_eq!(plains.description, "Your first time in Somewhere.");
+
+        let mob = |id: &str| read_report(&serde_json::json!({ "kind": "mob", "id": id, "name": "Axolotl" }), true);
+        let Some(Report::Mob(blue)) = mob("minecraft:axolotl/blue") else { panic!("blue axolotl") };
+        assert_eq!((blue.title.as_str(), blue.advancement.as_str()), ("A blue axolotl", "Axolotl"));
+        assert!(mob("minecraft:cow").is_none());
+        assert!(read_report(&serde_json::json!({ "kind": "weather", "id": "rain" }), true).is_none());
+        assert_eq!(advancement_key("minecraft:nether/find_fortress"), "nether.find_fortress");
+        assert_eq!(advancement_key("create:root"), "create:root");
     }
 
     #[test]

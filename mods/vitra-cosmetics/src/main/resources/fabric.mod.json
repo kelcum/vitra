@@ -3,7 +3,7 @@
   "id": "vitra-cosmetics",
   "version": "${version}",
   "name": "Vitra Cosmetics",
-  "description": "Shows the Vitra badge next to players using Vitra, and their Vitra capes. Added by the Vitra launcher.",
+  "description": "Shows the Vitra badge next to players using Vitra and their Vitra capes, and tells Vitra about your big moments for its Memories. Added by the Vitra launcher.",
   "authors": ["k3"],
   "contact": { "homepage": "https://xan.gripe/vitra/" },
   "license": "All-Rights-Reserved",

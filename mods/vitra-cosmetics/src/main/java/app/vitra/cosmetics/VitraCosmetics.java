@@ -9,6 +9,7 @@ public final class VitraCosmetics implements ClientModInitializer {
     public static final Logger LOG = LoggerFactory.getLogger("Vitra Cosmetics");
     public static final String API = System.getProperty("vitra.cosmetics.api", "https://api.xan.gripe");
     public static final String TOKEN = System.getProperty("vitra.cosmetics.token", "");
+    public static final boolean OFF = Boolean.getBoolean("vitra.cosmetics.off");
 
     public static boolean badgesAvailable;
 
@@ -16,9 +17,10 @@ public final class VitraCosmetics implements ClientModInitializer {
     public void onInitializeClient() {
         FabricLoader loader = FabricLoader.getInstance();
         badgesAvailable = loader.isModLoaded("fabric-resource-loader-v1") || loader.isModLoaded("fabric-resource-loader-v0");
-        if (!badgesAvailable) LOG.warn("Fabric API isn't installed, so Vitra badges are off (capes still work)");
+        if (!badgesAvailable && !OFF) LOG.warn("Fabric API isn't installed, so Vitra badges are off (capes still work)");
         if (Boolean.getBoolean("vitra.cosmetics.selftest")) selfTest();
-        Directory.start();
+        if (!OFF) Directory.start();
+        Moments.start();
     }
 
     private static void selfTest() {
