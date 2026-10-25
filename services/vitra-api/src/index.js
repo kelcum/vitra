@@ -57,6 +57,8 @@ async function route(req, env, ctx, url) {
   if (p === '/v1/me/cape' && m === 'PUT') return setCape(env, await body(req));
   if (p === '/v1/badge-requests' && m === 'POST') return submitBadgeRequest(env, req, await body(req, MAX_BADGE_BODY_BYTES));
   if (p === '/v1/admin/badge-requests' && m === 'GET') return listBadgeRequests(env, req, url);
+  if (p === '/v1/badges/hidden' && m === 'GET') return hiddenBadgeUsers(env);
+  if (p === '/v1/badges/hidden' && m === 'POST') return setBadgesHidden(env, req, await body(req));
   let r;
   if ((r = p.match(/^\/v1\/admin\/badge-requests\/([0-9a-f]{16})$/))) {
     if (m === 'GET') return getBadgeRequest(env, req, r[1]);
@@ -395,12 +397,29 @@ async function submitBadgeRequest(env, req, b) {
   return json({ ok: true, id }, 201);
 }
 
-function feedAllowed(env, req) {
-  const want = env.BADGE_FEED_KEY || '', got = req.headers.get('x-feed-key') || '';
-  if (!want || want.length !== got.length) throw new HttpError(403, 'Not allowed.');
+function secretMatches(want, got) {
+  if (!want || want.length !== got.length) return false;
   let diff = 0;
   for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ got.charCodeAt(i);
-  if (diff) throw new HttpError(403, 'Not allowed.');
+  return !diff;
+}
+
+function feedAllowed(env, req) {
+  if (!secretMatches(env.BADGE_FEED_KEY || '', req.headers.get('x-feed-key') || '')) throw new HttpError(403, 'Not allowed.');
+}
+
+async function hiddenBadgeUsers(env, cache = 'public, max-age=30') {
+  const { results } = await env.DB.prepare('SELECT user_id FROM badge_hidden ORDER BY user_id').all();
+  return json({ users: results.map(r => r.user_id) }, 200, { 'cache-control': cache });
+}
+
+async function setBadgesHidden(env, req, b) {
+  const owner = env.BADGE_OWNER || '';
+  if (!owner || !secretMatches(env.BADGE_OWNER_KEY || '', bearer(req))) throw new HttpError(403, 'Not allowed.');
+  if (typeof b?.hidden !== 'boolean') throw new HttpError(400, 'Send {"hidden": true} or {"hidden": false}.');
+  if (b.hidden) await env.DB.prepare('INSERT OR REPLACE INTO badge_hidden (user_id, updated) VALUES (?, ?)').bind(owner, Date.now()).run();
+  else await env.DB.prepare('DELETE FROM badge_hidden WHERE user_id = ?').bind(owner).run();
+  return hiddenBadgeUsers(env, 'no-store');
 }
 
 const BADGE_COLUMNS = 'id, discord, name, badge, colors, details, image_type, source, status, created, posted, design, preview IS NOT NULL AS has_preview';
