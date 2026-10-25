@@ -58,6 +58,8 @@ async function route(req, env, ctx, url) {
   if (p === '/v1/badge-requests' && m === 'POST') return submitBadgeRequest(env, req, await body(req, MAX_BADGE_BODY_BYTES));
   if (p === '/v1/admin/badge-requests' && m === 'GET') return listBadgeRequests(env, req, url);
   if (p === '/v1/badges/hidden' && m === 'GET') return hiddenBadgeUsers(env);
+  if (p === '/v1/badges/prefs' && m === 'GET') return badgePrefs(env);
+  if (p === '/v1/badges/prefs' && m === 'POST') return setBadgePrefs(env, req, await body(req));
   if (p === '/v1/badges/hidden' && m === 'POST') return setBadgesHidden(env, req, await body(req));
   let r;
   if ((r = p.match(/^\/v1\/admin\/badge-requests\/([0-9a-f]{16})$/))) {
@@ -411,6 +413,36 @@ function feedAllowed(env, req) {
 async function hiddenBadgeUsers(env, cache = 'public, max-age=30') {
   const { results } = await env.DB.prepare('SELECT user_id FROM badge_hidden ORDER BY user_id').all();
   return json({ users: results.map(r => r.user_id) }, 200, { 'cache-control': cache });
+}
+
+const BADGE_ID_RE = /^[a-z0-9_]{1,64}$/;
+const BADGE_PREF_USERS_PER_HOUR = 30;
+
+async function badgePrefs(env, cache = 'public, max-age=30') {
+  const { results } = await env.DB.prepare('SELECT user_id, hidden FROM badge_prefs').all();
+  const prefs = {};
+  for (const r of results) {
+    const hidden = JSON.parse(r.hidden || '[]');
+    if (hidden.length) prefs[r.user_id] = { hidden };
+  }
+  return json({ prefs }, 200, { 'cache-control': cache });
+}
+
+async function setBadgePrefs(env, req, b) {
+  const userId = String(b?.userId ?? '');
+  if (!SNOWFLAKE_RE.test(userId)) throw new HttpError(400, 'Send your Discord user ID.');
+  if (!Array.isArray(b.hidden) || b.hidden.length > 64 || !b.hidden.every(id => typeof id === 'string' && BADGE_ID_RE.test(id))) {
+    throw new HttpError(400, 'Send the badges to hide as a list of badge IDs.');
+  }
+  const now = Date.now();
+  const ip = await sha256hex(`badgeprefs|${req.headers.get('cf-connecting-ip') || 'unknown'}|${env.TOKEN_SECRET || ''}`);
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM badge_prefs WHERE ip = ?1 AND updated > ?2 AND user_id != ?3')
+    .bind(ip, now - 3600000, userId).first();
+  if ((recent?.n || 0) >= BADGE_PREF_USERS_PER_HOUR) throw new HttpError(429, 'Too many changes from here, try again in a bit.');
+  const hidden = [...new Set(b.hidden)].sort();
+  await env.DB.prepare('INSERT INTO badge_prefs (user_id, hidden, ip, updated) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(user_id) DO UPDATE SET hidden = ?2, ip = ?3, updated = ?4')
+    .bind(userId, JSON.stringify(hidden), ip, now).run();
+  return badgePrefs(env, 'no-store');
 }
 
 async function setBadgesHidden(env, req, b) {

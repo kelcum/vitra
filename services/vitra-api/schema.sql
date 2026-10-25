@@ -52,3 +52,12 @@ CREATE TABLE IF NOT EXISTS badge_hidden (
   user_id TEXT PRIMARY KEY,
   updated INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS badge_prefs (
+  user_id TEXT PRIMARY KEY,
+  hidden  TEXT NOT NULL,
+  ip      TEXT NOT NULL,
+  updated INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS badge_prefs_ip ON badge_prefs (ip, updated);
