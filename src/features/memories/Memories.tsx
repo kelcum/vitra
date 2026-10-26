@@ -7,12 +7,15 @@ import {
   Copy,
   ExternalLink,
   Flag,
+  Film,
   Flame,
   FolderOpen,
   Gem,
   Globe,
+  Image as ImageIcon,
   Images,
   MapPin,
+  Play,
   PawPrint,
   Server,
   Settings2,
@@ -25,12 +28,12 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { Button, IconButton } from "../../components/ui/Button";
-import { SearchInput } from "../../components/ui/Controls";
+import { SearchInput, Segmented } from "../../components/ui/Controls";
 import { Empty, Notice, Skeleton } from "../../components/ui/Feedback";
 import { ConfirmDialog, Modal } from "../../components/ui/Overlay";
 import { api, errorMessage } from "../../lib/api";
 import { useMemoryVersion } from "../../lib/events";
-import { cx, fileSrc, LOADER_LABEL } from "../../lib/format";
+import { cx, fileSrc, formatBytes, LOADER_LABEL } from "../../lib/format";
 import { toast, useNav, useSettings } from "../../lib/store";
 import type { Memory, MemoryCategory, MemorySpot } from "../../lib/types";
 import { useWheelScrollX } from "../../lib/wheel";
@@ -167,7 +170,7 @@ export default function Memories() {
           <h1 className="t-title">Memories</h1>
           <p>
             {memories && all.length > 0
-              ? `${all.length} moment${all.length === 1 ? "" : "s"} · kept automatically while you play`
+              ? summary(all)
               : "Your big moments, kept automatically while you play"}
           </p>
         </div>
@@ -266,13 +269,20 @@ export default function Memories() {
         onNext={openIndex >= 0 && openIndex < shown.length - 1 ? () => setOpenId(shown[openIndex + 1].id) : undefined}
         onFavorite={toggleFavorite}
         onDelete={(m) => setDeleting(m)}
+        onRemoveClip={async (m) => {
+          try {
+            replace(await api.deleteMemoryClip(m.id));
+          } catch (e) {
+            toast.error("Couldn't remove the clip", errorMessage(e));
+          }
+        }}
       />
       <ConfirmDialog
         open={!!deleting}
         danger
         icon={<Trash2 />}
         title="Delete this memory?"
-        description={`"${deleting?.title}" and its picture will be gone for good.`}
+        description={`"${deleting?.title}" and its picture${deleting?.clip ? " and clip" : ""} will be gone for good.`}
         confirmLabel="Delete"
         busy={busy}
         onClose={() => setDeleting(null)}
@@ -293,6 +303,14 @@ export default function Memories() {
       />
     </div>
   );
+}
+
+function summary(all: Memory[]) {
+  const moments = `${all.length} moment${all.length === 1 ? "" : "s"}`;
+  const clips = all.filter((m) => m.clip);
+  if (clips.length === 0) return `${moments} · kept automatically while you play`;
+  const bytes = clips.reduce((n, m) => n + (m.clipBytes ?? 0), 0);
+  return `${moments} · ${clips.length} clip${clips.length === 1 ? "" : "s"} (${formatBytes(bytes)})`;
 }
 
 function Shot({ memory, full }: { memory: Memory; full?: boolean }) {
@@ -337,6 +355,12 @@ function MemoryCard({ memory: m, onOpen, onFavorite }: { memory: Memory; onOpen:
         >
           <Star />
         </button>
+        {m.clip && (
+          <span className="memory-clip-chip">
+            <Play />
+            Clip
+          </span>
+        )}
       </div>
       <div className="memory-body">
         <div className="memory-title truncate">{m.title}</div>
@@ -389,6 +413,7 @@ function MemoryViewer({
   onNext,
   onFavorite,
   onDelete,
+  onRemoveClip,
 }: {
   memory: Memory | null;
   onClose: () => void;
@@ -396,7 +421,12 @@ function MemoryViewer({
   onNext?: () => void;
   onFavorite: (m: Memory) => void;
   onDelete: (m: Memory) => void;
+  onRemoveClip: (m: Memory) => void;
 }) {
+  const [view, setView] = useState<"clip" | "picture">("clip");
+  useEffect(() => {
+    setView("clip");
+  }, [m?.id]);
   useEffect(() => {
     if (!m) return;
     const onKey = (e: KeyboardEvent) => {
@@ -412,6 +442,8 @@ function MemoryViewer({
     if (m) setLast(m);
   }, [m]);
   const shown = m ?? last;
+  const playing = view === "clip" && !!shown?.clip;
+  const file = playing ? shown?.clip : shown?.image;
   return (
     <Modal
       open={!!m}
@@ -426,15 +458,20 @@ function MemoryViewer({
             <Button icon={<Star className={cx(shown.favorite && "memory-star-on")} />} onClick={() => onFavorite(shown)}>
               {shown.favorite ? "Favorite" : "Add to favorites"}
             </Button>
-            {shown.image && (
-              <Button icon={<ExternalLink />} onClick={() => api.openPath(shown.image!).catch((e) => toast.error("Couldn't open the picture", errorMessage(e)))}>
-                Open picture
+            {file && (
+              <Button icon={<ExternalLink />} onClick={() => api.openPath(file).catch((e) => toast.error("Couldn't open the file", errorMessage(e)))}>
+                {playing ? "Open video" : "Open picture"}
               </Button>
             )}
             <Button icon={<FolderOpen />} onClick={() => api.revealMemory(shown.id).catch((e) => toast.error("Couldn't show the file", errorMessage(e)))}>
               Show in folder
             </Button>
             <span className="spacer" />
+            {playing && (
+              <Button variant="ghost" icon={<Film />} onClick={() => onRemoveClip(shown)}>
+                Remove clip
+              </Button>
+            )}
             <Button variant="danger" icon={<Trash2 />} onClick={() => onDelete(shown)}>
               Delete
             </Button>
@@ -444,8 +481,25 @@ function MemoryViewer({
     >
       {shown && (
         <div className="memory-view" style={catStyle(shown.category)}>
+          {shown.clip && (
+            <div className="memory-view-switch">
+              <Segmented
+                size="sm"
+                value={view}
+                onChange={setView}
+                options={[
+                  { value: "clip", label: "Clip", icon: <Film /> },
+                  { value: "picture", label: "Picture", icon: <ImageIcon /> },
+                ]}
+              />
+            </div>
+          )}
           <div className="memory-view-shot">
-            <Shot memory={shown} full />
+            {playing && shown.clip ? (
+              <video key={shown.id} src={fileSrc(shown.clip)} controls autoPlay muted loop playsInline />
+            ) : (
+              <Shot memory={shown} full />
+            )}
             {onPrev && (
               <IconButton label="Previous" className="memory-nav memory-nav--prev" onClick={onPrev}>
                 <ChevronLeft />

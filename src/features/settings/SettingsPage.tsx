@@ -287,6 +287,52 @@ function Launcher({ s, update }: SectionProps) {
       <Field label="Every advancement" description="Also keeps the smaller advancements (and in Fabric 26.3, every first biome), not just milestones and challenges.">
         <Toggle checked={s.memoriesEveryAdvancement} onChange={(v) => update({ memoriesEveryAdvancement: v })} disabled={!s.memories} />
       </Field>
+      <Field
+        label="Clips"
+        description="Also keeps a short video of each moment. While you play, Vitra records the game window in the background and only keeps the seconds around a moment, using your graphics card's video encoder. Starts with your next game. No sound yet."
+      >
+        <Toggle checked={s.clips} onChange={(v) => update({ clips: v })} disabled={!s.memories} />
+      </Field>
+      <Field label="Clip length">
+        <Select
+          value={String(s.clipSeconds)}
+          onChange={(v) => update({ clipSeconds: Number(v) })}
+          width={260}
+          disabled={!s.memories || !s.clips}
+          options={[
+            { value: "10", label: "10 seconds (7 before, 3 after)" },
+            { value: "20", label: "20 seconds (15 before, 5 after)" },
+            { value: "30", label: "30 seconds (20 before, 10 after)" },
+          ]}
+        />
+      </Field>
+      <Field label="Clip quality">
+        <Select
+          value={s.clipQuality}
+          onChange={(clipQuality) => update({ clipQuality })}
+          width={260}
+          disabled={!s.memories || !s.clips}
+          options={[
+            { value: "720p", label: "720p (smaller files)" },
+            { value: "1080p", label: "1080p" },
+          ]}
+        />
+      </Field>
+      <Field label="Space for clips" description="When clips take more than this, the oldest are removed first. Favorites are never removed.">
+        <Select
+          value={String(s.clipsMaxMb)}
+          onChange={(v) => update({ clipsMaxMb: Number(v) })}
+          width={260}
+          disabled={!s.memories || !s.clips}
+          options={[
+            { value: "1024", label: "1 GB" },
+            { value: "2048", label: "2 GB" },
+            { value: "5120", label: "5 GB" },
+            { value: "10240", label: "10 GB" },
+            { value: "20480", label: "20 GB" },
+          ]}
+        />
+      </Field>
     </>
   );
 }

@@ -125,6 +125,10 @@ pub struct Memory {
     pub image: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumb: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clip: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clip_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -329,6 +333,15 @@ pub struct Watcher {
     place: Place,
     seen: HashSet<String>,
     mod_reports: bool,
+    recorder: Option<Arc<crate::clips::Recorder>>,
+}
+
+impl Drop for Watcher {
+    fn drop(&mut self) {
+        if let Some(recorder) = &self.recorder {
+            recorder.stop();
+        }
+    }
 }
 
 struct Found {
@@ -341,14 +354,14 @@ struct Found {
 }
 
 impl Watcher {
-    pub fn new(state: Arc<AppState>, game: GameInfo) -> Self {
+    pub fn new(state: Arc<AppState>, game: GameInfo, recorder: Option<Arc<crate::clips::Recorder>>) -> Self {
         let game = Arc::new(game);
         let patterns = Arc::new(OnceLock::new());
         let (g, p, assets) = (game.clone(), patterns.clone(), state.assets_dir());
         tauri::async_runtime::spawn_blocking(move || {
             let _ = p.set(load_patterns(&g.client_jar, &assets, &g.asset_index, &g.game_dir));
         });
-        Self { state, game, patterns, place: Place::Menu, seen: HashSet::new(), mod_reports: false }
+        Self { state, game, patterns, place: Place::Menu, seen: HashSet::new(), mod_reports: false, recorder }
     }
 
     pub fn line(&mut self, text: &str) {
@@ -451,18 +464,36 @@ impl Watcher {
             favorite: false,
             image: None,
             thumb: None,
+            clip: None,
+            clip_bytes: None,
         };
-        let (state, pid) = (self.state.clone(), self.game.pid);
+        let (state, pid, at) = (self.state.clone(), self.game.pid, memory.at);
+        let recorder = self.recorder.clone().filter(|_| self.state.settings().clips);
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(CAPTURE_DELAY).await;
             let st = state.clone();
             let saved = tokio::task::spawn_blocking(move || save(&st, memory, capture::window_of_process(pid))).await;
-            match saved {
+            let id = match saved {
                 Ok(Ok(memory)) => {
+                    let id = memory.id.clone();
                     let _ = state.app.emit("memory://added", memory);
+                    id
                 }
-                Ok(Err(e)) => log::warn!("Couldn't save a memory: {e}"),
-                Err(e) => log::warn!("Couldn't save a memory: {e}"),
+                Ok(Err(e)) => return log::warn!("Couldn't save a memory: {e}"),
+                Err(e) => return log::warn!("Couldn't save a memory: {e}"),
+            };
+            let Some(recorder) = recorder else { return };
+            let st = state.clone();
+            let clipped = tokio::task::spawn_blocking(move || {
+                if !recorder.save(at, &dir(&st).join(format!("{id}.mp4"))) {
+                    return None;
+                }
+                trim_clips(&st);
+                load(&st, &id).ok().filter(|m| m.clip.is_some())
+            })
+            .await;
+            if let Ok(Some(memory)) = clipped {
+                let _ = state.app.emit("memory://updated", memory);
             }
         });
     }
@@ -572,6 +603,9 @@ fn with_files(dir: &Path, mut memory: Memory) -> Memory {
     let thumb = dir.join(format!("{}.thumb.jpg", memory.id));
     memory.image = image.exists().then(|| image.to_string_lossy().to_string());
     memory.thumb = thumb.exists().then(|| thumb.to_string_lossy().to_string()).or_else(|| memory.image.clone());
+    let clip = dir.join(format!("{}.mp4", memory.id));
+    memory.clip_bytes = clip.metadata().ok().map(|m| m.len()).filter(|&n| n > 0);
+    memory.clip = memory.clip_bytes.map(|_| clip.to_string_lossy().to_string());
     memory
 }
 
@@ -579,6 +613,8 @@ fn write(dir: &Path, memory: &Memory) -> Result<()> {
     let mut plain = memory.clone();
     plain.image = None;
     plain.thumb = None;
+    plain.clip = None;
+    plain.clip_bytes = None;
     util::write_json(&dir.join(format!("{}.json", memory.id)), &plain)
 }
 
@@ -605,19 +641,49 @@ fn load(state: &AppState, id: &str) -> Result<Memory> {
     Ok(with_files(&dir, memory))
 }
 
-#[tauri::command]
-pub fn list_memories(state: State<'_, Arc<AppState>>) -> Vec<Memory> {
-    let dir = dir(&state);
-    let mut out: Vec<Memory> = std::fs::read_dir(&dir)
+fn all(dir: &Path) -> Vec<Memory> {
+    let mut out: Vec<Memory> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()
         .flatten()
         .filter(|e| e.path().extension().is_some_and(|x| x == "json") && e.file_name() != "sightings.json")
         .filter_map(|e| util::read_json::<Memory>(&e.path()).ok())
-        .map(|m| with_files(&dir, m))
+        .map(|m| with_files(dir, m))
         .collect();
     out.sort_by_key(|m| std::cmp::Reverse(m.at));
     out
+}
+
+fn clips_over(memories: &[Memory], limit: u64) -> Vec<String> {
+    let mut clips: Vec<&Memory> = memories.iter().filter(|m| m.clip.is_some()).collect();
+    let mut total: u64 = clips.iter().filter_map(|m| m.clip_bytes).sum();
+    clips.sort_by_key(|m| m.at);
+    let mut out = Vec::new();
+    for m in clips {
+        if total <= limit {
+            break;
+        }
+        if m.favorite {
+            continue;
+        }
+        if let Some(path) = &m.clip {
+            out.push(path.clone());
+            total = total.saturating_sub(m.clip_bytes.unwrap_or_default());
+        }
+    }
+    out
+}
+
+fn trim_clips(state: &AppState) {
+    let limit = state.settings().clips_max_mb as u64 * 1024 * 1024;
+    for path in clips_over(&all(&dir(state)), limit) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+#[tauri::command]
+pub fn list_memories(state: State<'_, Arc<AppState>>) -> Vec<Memory> {
+    all(&dir(&state))
 }
 
 #[tauri::command]
@@ -632,13 +698,23 @@ pub fn set_memory_favorite(state: State<'_, Arc<AppState>>, id: String, favorite
 pub fn delete_memory(state: State<'_, Arc<AppState>>, id: String) -> Result<()> {
     check_id(&id)?;
     let dir = dir(&state);
-    for name in [format!("{id}.jpg"), format!("{id}.thumb.jpg"), format!("{id}.json")] {
+    for name in [format!("{id}.mp4"), format!("{id}.jpg"), format!("{id}.thumb.jpg"), format!("{id}.json")] {
         match std::fs::remove_file(dir.join(name)) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
             _ => {}
         }
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn delete_memory_clip(state: State<'_, Arc<AppState>>, id: String) -> Result<Memory> {
+    check_id(&id)?;
+    match std::fs::remove_file(dir(&state).join(format!("{id}.mp4"))) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
+        _ => {}
+    }
+    load(&state, &id)
 }
 
 #[tauri::command]
@@ -736,6 +812,36 @@ mod tests {
         assert!(read_report(&serde_json::json!({ "kind": "weather", "id": "rain" }), true).is_none());
         assert_eq!(advancement_key("minecraft:nether/find_fortress"), "nether.find_fortress");
         assert_eq!(advancement_key("create:root"), "create:root");
+    }
+
+    #[test]
+    fn old_clips_go_first_and_favorites_stay() {
+        let clip = |at: i64, favorite: bool| Memory {
+            id: format!("m{at}"),
+            at,
+            instance_id: String::new(),
+            instance_name: String::new(),
+            game_version: String::new(),
+            loader: String::new(),
+            world: None,
+            server: None,
+            category: "treasure".into(),
+            title: String::new(),
+            description: String::new(),
+            advancement: String::new(),
+            advancement_id: None,
+            spot: None,
+            favorite,
+            image: None,
+            thumb: None,
+            clip: Some(format!("m{at}.mp4")),
+            clip_bytes: Some(100),
+        };
+        let memories = vec![clip(4, false), clip(1, true), clip(3, false), clip(2, false)];
+        assert_eq!(clips_over(&memories, 150), vec!["m2.mp4", "m3.mp4", "m4.mp4"]);
+        assert_eq!(clips_over(&memories, 300), vec!["m2.mp4"]);
+        assert!(clips_over(&memories, 400).is_empty());
+        assert_eq!(clips_over(&[clip(1, true), clip(2, true)], 0), Vec::<String>::new());
     }
 
     #[test]

@@ -499,6 +499,17 @@ pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Re
     let app = state.app.clone();
     let log_id = id.clone();
     let log_state = state.clone();
+    let settings = state.settings();
+    let recorder = (settings.memories && settings.clips)
+        .then(|| {
+            crate::clips::Recorder::start(
+                pid,
+                state.cache_dir().join("clips").join(format!("{id}-{pid}")),
+                crate::clips::ClipSettings::from(&settings),
+            )
+        })
+        .flatten()
+        .map(Arc::new);
     let mut memories = crate::memories::Watcher::new(
         state.clone(),
         crate::memories::GameInfo {
@@ -510,6 +521,7 @@ pub async fn launch(state: Arc<AppState>, id: String, opts: LaunchOptions) -> Re
             pid,
             started_at,
         },
+        recorder,
     );
     let tail_handle = tauri::async_runtime::spawn(async move {
         let mut tail: Vec<String> = Vec::new();

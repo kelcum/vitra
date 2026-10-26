@@ -59,6 +59,10 @@ pub struct Settings {
     pub discord_show_server: bool,
     pub memories: bool,
     pub memories_every_advancement: bool,
+    pub clips: bool,
+    pub clip_seconds: u32,
+    pub clip_quality: String,
+    pub clips_max_mb: u32,
 
     pub game_data_dir: Option<String>,
     pub download_concurrency: u32,
@@ -97,6 +101,10 @@ impl Default for Settings {
             discord_show_server: true,
             memories: true,
             memories_every_advancement: false,
+            clips: false,
+            clip_seconds: 20,
+            clip_quality: "720p".into(),
+            clips_max_mb: 5120,
             game_data_dir: None,
             download_concurrency: 16,
             default_memory_mb: recommended_memory_mb(false),
@@ -128,6 +136,15 @@ impl Settings {
         self.download_concurrency = self.download_concurrency.clamp(1, 64);
         let total = total_memory_mb();
         self.default_memory_mb = self.default_memory_mb.clamp(512, total.saturating_sub(1024).max(1024));
+        self.clip_seconds = match self.clip_seconds {
+            0..=10 => 10,
+            11..=20 => 20,
+            _ => 30,
+        };
+        if !matches!(self.clip_quality.as_str(), "720p" | "1080p") {
+            self.clip_quality = "720p".into();
+        }
+        self.clips_max_mb = self.clips_max_mb.clamp(512, 102_400);
         if !matches!(self.theme.as_str(), "dark" | "light" | "system") {
             self.theme = "dark".into();
         }
