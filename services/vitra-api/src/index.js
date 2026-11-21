@@ -83,14 +83,15 @@ async function route(req, env, ctx, url) {
   if (p === '/v1/admin/auth/logout' && m === 'POST') return adminLogout(req);
   if (p === '/v1/admin/me' && m === 'GET') return adminMe(env, req);
   if (p === '/v1/admin/badges' && m === 'GET') return listPublishedBadges(env, req);
-  if (p === '/v1/admin/badges' && m === 'POST') return publishBadge(env, req, await body(req, MAX_BADGE_BODY_BYTES * 2));
+  if (p === '/v1/admin/badges' && m === 'POST') return publishBadge(env, ctx, req, await body(req, MAX_BADGE_BODY_BYTES * 2));
+  if (p === '/v1/badges/published' && m === 'GET') return publishedBadges(env, ctx);
   let r;
   if ((r = p.match(/^\/v1\/admin\/badge-requests\/([0-9a-f]{16})$/))) {
     if (m === 'GET') return getBadgeRequest(env, req, r[1]);
     if (m === 'POST') return updateBadgeRequest(env, req, r[1], await body(req));
   }
   if ((r = p.match(/^\/v1\/admin\/badge-requests\/([0-9a-f]{16})\/(image|preview)$/)) && m === 'GET') return badgeRequestImage(env, req, r[1], r[2]);
-  if ((r = p.match(/^\/v1\/admin\/badges\/([0-9a-f]{16})$/)) && m === 'DELETE') return unpublishBadge(env, req, r[1]);
+  if ((r = p.match(/^\/v1\/admin\/badges\/([0-9a-f]{16})$/)) && m === 'DELETE') return unpublishBadge(env, ctx, req, r[1]);
   if ((r = p.match(/^\/v1\/admin\/breakage\/(\d{1,8})$/)) && m === 'POST') return markBreakagePosted(env, req, Number(r[1]), await body(req));
   if ((r = p.match(/^\/v1\/players\/([0-9a-f]{32})$/)) && m === 'GET') return player(env, r[1]);
   if ((r = p.match(/^\/v1\/capes\/([0-9a-f]{20})\.png$/)) && m === 'GET') return capeImage(env, ctx, req, r[1]);
@@ -829,7 +830,18 @@ async function requestImage(env, row) {
   return new Uint8Array(await obj.arrayBuffer());
 }
 
-async function publishBadge(env, req, b) {
+const PUBLISHED_KEY = 'https://api.xan.gripe/v1/badges/published';
+
+async function publishedBadges(env, ctx) {
+  const hit = await caches.default.match(PUBLISHED_KEY);
+  if (hit) return hit;
+  const { head, entries } = await readPublishedBadges(env);
+  const res = json({ commit: head, badges: entries }, 200, { 'cache-control': 'public, max-age=60' });
+  ctx.waitUntil(caches.default.put(PUBLISHED_KEY, res.clone()));
+  return res;
+}
+
+async function publishBadge(env, ctx, req, b) {
   await adminAllowed(env, req, false);
   const users = [...new Set((Array.isArray(b.users) ? b.users : []).map(u => String(u).trim()))];
   if (!users.length || users.length > MAX_BADGE_USERS || !users.every(u => SNOWFLAKE_RE.test(u))) {
@@ -881,16 +893,18 @@ async function publishBadge(env, req, b) {
     const next = [...list];
     for (const e of entries) {
       const at = next.findIndex(x => x.id === e.id);
+      if (at >= 0 && !rows.length && next[at].request) e.request = { ...next[at].request, ...(e.request.pair ? { pair: e.request.pair } : {}) };
       if (at >= 0) next[at] = e;
       else next.push(e);
     }
     return { next, drop: [...ids], message };
   });
   if (rows.length) await env.DB.prepare("UPDATE badge_requests SET status = 'done' WHERE id = ?1 OR pair_of = ?1").bind(rows[0].id).run();
+  ctx.waitUntil(caches.default.delete(PUBLISHED_KEY));
   return json({ commit: result.commit, badges: entries }, 201);
 }
 
-async function unpublishBadge(env, req, id) {
+async function unpublishBadge(env, ctx, req, id) {
   await adminAllowed(env, req, false);
   let gone = [];
   const result = await commitBadges(env, [], list => {
@@ -899,6 +913,7 @@ async function unpublishBadge(env, req, id) {
     const names = gone.map(e => `"${e.name}"`);
     return { next: list.filter(e => !gone.includes(e)), drop: gone.map(e => e.id), message: `Remove the ${names.join(' and ')} badge${gone.length > 1 ? 's' : ''}` };
   });
+  ctx.waitUntil(caches.default.delete(PUBLISHED_KEY));
   return json({ commit: result.commit, removed: gone.map(e => e.id) });
 }
 
