@@ -24,6 +24,9 @@ const BADGE_REQUESTS_PER_HOUR = 3;
 const BADGE_REQUESTS_PER_DAY = 8;
 const BADGE_TESTER_PER_HOUR = 100;
 const BADGE_STATUSES = ['new', 'approved', 'denied', 'done'];
+const PLUGIN_NAME_RE = /^[A-Za-z0-9 _.+-]{1,64}$/;
+const MAX_BREAKAGE_PLUGINS = 50;
+const BREAKAGE_ROWS_PER_DAY = 200;
 
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -61,12 +64,15 @@ async function route(req, env, ctx, url) {
   if (p === '/v1/badges/prefs' && m === 'GET') return badgePrefs(env);
   if (p === '/v1/badges/prefs' && m === 'POST') return setBadgePrefs(env, req, await body(req));
   if (p === '/v1/badges/hidden' && m === 'POST') return setBadgesHidden(env, req, await body(req));
+  if (p === '/v1/breakage' && m === 'POST') return reportBreakage(env, req, await body(req, 8192));
+  if (p === '/v1/admin/breakage' && m === 'GET') return listBreakage(env, req);
   let r;
   if ((r = p.match(/^\/v1\/admin\/badge-requests\/([0-9a-f]{16})$/))) {
     if (m === 'GET') return getBadgeRequest(env, req, r[1]);
     if (m === 'POST') return updateBadgeRequest(env, req, r[1], await body(req));
   }
   if ((r = p.match(/^\/v1\/admin\/badge-requests\/([0-9a-f]{16})\/(image|preview)$/)) && m === 'GET') return badgeRequestImage(env, req, r[1], r[2]);
+  if ((r = p.match(/^\/v1\/admin\/breakage\/(\d{1,8})$/)) && m === 'POST') return markBreakagePosted(env, req, Number(r[1]), await body(req));
   if ((r = p.match(/^\/v1\/players\/([0-9a-f]{32})$/)) && m === 'GET') return player(env, r[1]);
   if ((r = p.match(/^\/v1\/capes\/([0-9a-f]{20})\.png$/)) && m === 'GET') return capeImage(env, ctx, req, r[1]);
   if ((r = p.match(/^\/v1\/admin\/presets\/([a-z0-9-]{1,32})$/)) && m === 'PUT') return putPreset(env, req, r[1], await body(req));
@@ -505,6 +511,50 @@ async function badgeRequestImage(env, req, id, which) {
   return new Response(new Uint8Array(bytes), {
     headers: { 'content-type': which === 'preview' ? 'image/png' : r.image_type, 'cache-control': 'private, no-store' },
   });
+}
+
+async function reportBreakage(env, req, b) {
+  const build = b?.build;
+  if (!Number.isInteger(build) || build < 1 || build > 99_999_999) throw new HttpError(400, 'Send the Discord build number.');
+  const plugins = Array.isArray(b.plugins) ? [...new Set(b.plugins)] : [];
+  if (!plugins.length || plugins.length > MAX_BREAKAGE_PLUGINS || !plugins.every(n => typeof n === 'string' && PLUGIN_NAME_RE.test(n))) {
+    throw new HttpError(400, 'Send the broken plugins as a list of plugin names.');
+  }
+  const now = Date.now();
+  const ip = await sha256hex(`breakage|${req.headers.get('cf-connecting-ip') || 'unknown'}|${env.TOKEN_SECRET || ''}`);
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM breakage_reports WHERE ip = ?1 AND created > ?2').bind(ip, now - 86400000).first();
+  if ((recent?.n || 0) + plugins.length > BREAKAGE_ROWS_PER_DAY) throw new HttpError(429, 'Too many reports from here, try again tomorrow.');
+  await env.DB.batch([
+    env.DB.prepare('INSERT OR IGNORE INTO breakage_builds (build, first) VALUES (?1, ?2)').bind(build, now),
+    ...plugins.map(n => env.DB.prepare('INSERT OR IGNORE INTO breakage_reports (build, plugin, ip, created) VALUES (?1, ?2, ?3, ?4)').bind(build, n, ip, now)),
+  ]);
+  return json({ ok: true });
+}
+
+async function listBreakage(env, req) {
+  feedAllowed(env, req);
+  const recent = 'SELECT build FROM breakage_builds ORDER BY first DESC LIMIT 20';
+  const { results: builds } = await env.DB.prepare(`SELECT build, first, posted, message FROM breakage_builds WHERE build IN (${recent}) ORDER BY first ASC`).all();
+  const { results: rows } = await env.DB.prepare(`SELECT build, plugin, COUNT(*) AS reports FROM breakage_reports WHERE build IN (${recent}) GROUP BY build, plugin`).all();
+  return json({
+    builds: builds.map(x => ({
+      build: x.build,
+      first: x.first,
+      posted: JSON.parse(x.posted),
+      message: x.message,
+      plugins: rows.filter(r => r.build === x.build).map(r => ({ name: r.plugin, reports: r.reports })),
+    })),
+  });
+}
+
+async function markBreakagePosted(env, req, build, b) {
+  feedAllowed(env, req);
+  if (!Array.isArray(b?.posted) || !b.posted.every(n => typeof n === 'string' && PLUGIN_NAME_RE.test(n))) throw new HttpError(400, 'Send the posted plugin names.');
+  if (b.message !== undefined && !SNOWFLAKE_RE.test(String(b.message))) throw new HttpError(400, 'Send the message ID.');
+  const r = await env.DB.prepare('UPDATE breakage_builds SET posted = ?2, message = COALESCE(?3, message) WHERE build = ?1')
+    .bind(build, JSON.stringify([...new Set(b.posted)].sort()), b.message === undefined ? null : String(b.message)).run();
+  if (!r.meta.changes) throw new HttpError(404, 'No such build.');
+  return json({ ok: true });
 }
 
 const bearer = req => (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');

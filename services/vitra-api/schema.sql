@@ -61,3 +61,20 @@ CREATE TABLE IF NOT EXISTS badge_prefs (
 );
 
 CREATE INDEX IF NOT EXISTS badge_prefs_ip ON badge_prefs (ip, updated);
+
+CREATE TABLE IF NOT EXISTS breakage_builds (
+  build   INTEGER PRIMARY KEY,
+  first   INTEGER NOT NULL,
+  posted  TEXT NOT NULL DEFAULT '[]',
+  message TEXT
+);
+
+CREATE TABLE IF NOT EXISTS breakage_reports (
+  build   INTEGER NOT NULL,
+  plugin  TEXT NOT NULL,
+  ip      TEXT NOT NULL,
+  created INTEGER NOT NULL,
+  PRIMARY KEY (build, plugin, ip)
+);
+
+CREATE INDEX IF NOT EXISTS breakage_reports_ip ON breakage_reports (ip, created);
