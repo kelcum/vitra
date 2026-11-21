@@ -13,9 +13,9 @@ const UUID_RE = /^[0-9a-f]{32}$/;
 const NAME_RE = /^[A-Za-z0-9_]{1,16}$/;
 const SNOWFLAKE_RE = /^\d{17,20}$/;
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/;
-const MAX_BADGE_IMAGE_BYTES = 1_500_000;
+const MAX_BADGE_IMAGE_BYTES = 5_000_000;
 const MAX_BADGE_PREVIEW_BYTES = 200_000;
-const MAX_BADGE_BODY_BYTES = 2_600_000;
+const MAX_BADGE_BODY_BYTES = 7_200_000;
 const BADGE_SHAPES = ['circle', 'rounded', 'none'];
 const BADGE_BACKGROUNDS = ['gradient', 'solid', 'none'];
 const BADGE_EFFECTS = ['shine', 'glint', 'pulse', 'float', 'spin'];
@@ -362,7 +362,7 @@ function badgePart(b, label = '') {
   }
   let image = null, imageType = null, preview = null;
   if (b.image) {
-    image = decodeUpload(b.image, MAX_BADGE_IMAGE_BYTES, `The ${label}badge image is too big. Keep it under 1.5 MB.`);
+    image = decodeUpload(b.image, MAX_BADGE_IMAGE_BYTES, `The ${label}badge image is too big. Keep it under 5 MB.`);
     imageType = sniffImage(image);
     if (!imageType) throw new HttpError(400, 'The image has to be a PNG, JPG, GIF or WebP.');
   }
@@ -397,12 +397,14 @@ async function submitBadgeRequest(env, req, b) {
   const waiting = tester ? null : await env.DB.prepare("SELECT id FROM badge_requests WHERE discord = ?1 AND status = 'new' AND created > ?2 LIMIT 1")
     .bind(discordId, now - 14 * 86400000).first();
   if (waiting) throw new HttpError(409, "There's already a request waiting for that account. Hang tight.");
-  const id = newBadgeId();
+  const ids = parts.map(newBadgeId);
+  const id = ids[0];
   const source = b.source === 'deadbolt' ? 'deadbolt' : 'web';
+  await Promise.all(parts.map((p, i) => p.image && env.BADGE_IMAGES.put(`requests/${ids[i]}`, p.image, { httpMetadata: { contentType: p.imageType } })));
   await env.DB.batch(parts.map((p, i) => env.DB.prepare(
     `INSERT INTO badge_requests (id, discord, name, badge, colors, details, image, image_type, source, ip, status, created, posted, design, preview, pair_of)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'new', ?11, 0, ?12, ?13, ?14)`
-  ).bind(i ? newBadgeId() : id, discordId, name, p.badge, JSON.stringify(p.colors), details, p.image ? p.image.buffer : null, p.imageType,
+  ).bind(ids[i], discordId, name, p.badge, JSON.stringify(p.colors), details, null, p.imageType,
     source, ip, now, p.design ? JSON.stringify(p.design) : null, p.preview ? p.preview.buffer : null, i ? id : null)));
   return json({ ok: true, id }, 201);
 }
@@ -518,7 +520,7 @@ async function updateBadgeRequest(env, req, id, b) {
 async function badgeRequestImage(env, req, id, which) {
   feedAllowed(env, req);
   const r = await env.DB.prepare('SELECT image, image_type, preview FROM badge_requests WHERE id = ?1').bind(id).first();
-  const bytes = which === 'preview' ? r?.preview : r?.image;
+  const bytes = which === 'preview' ? r?.preview : r?.image || (r?.image_type && await (await env.BADGE_IMAGES.get(`requests/${id}`))?.arrayBuffer());
   if (!bytes) throw new HttpError(404, 'No image.');
   return new Response(new Uint8Array(bytes), {
     headers: { 'content-type': which === 'preview' ? 'image/png' : r.image_type, 'cache-control': 'private, no-store' },
