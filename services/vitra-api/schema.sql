@@ -41,12 +41,14 @@ CREATE TABLE IF NOT EXISTS badge_requests (
   created    INTEGER NOT NULL,
   posted     INTEGER NOT NULL DEFAULT 0,
   design     TEXT,
-  preview    BLOB
+  preview    BLOB,
+  pair_of    TEXT
 );
 
 CREATE INDEX IF NOT EXISTS badge_requests_ip ON badge_requests (ip, created);
 CREATE INDEX IF NOT EXISTS badge_requests_discord ON badge_requests (discord, status);
 CREATE INDEX IF NOT EXISTS badge_requests_posted ON badge_requests (posted, created);
+CREATE INDEX IF NOT EXISTS badge_requests_pair ON badge_requests (pair_of);
 
 CREATE TABLE IF NOT EXISTS badge_hidden (
   user_id TEXT PRIMARY KEY,

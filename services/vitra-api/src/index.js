@@ -55,7 +55,7 @@ async function route(req, env, ctx, url) {
   if (p === '/v1/presets' && m === 'GET') return presets(env);
   if (p === '/v1/stats' && m === 'GET') return stats(env);
   if (p === '/v1/me/cape' && m === 'PUT') return setCape(env, await body(req));
-  if (p === '/v1/badge-requests' && m === 'POST') return submitBadgeRequest(env, req, await body(req, MAX_BADGE_BODY_BYTES));
+  if (p === '/v1/badge-requests' && m === 'POST') return submitBadgeRequest(env, req, await body(req, MAX_BADGE_BODY_BYTES * 2));
   if (p === '/v1/admin/badge-requests' && m === 'GET') return listBadgeRequests(env, req, url);
   if (p === '/v1/badges/hidden' && m === 'GET') return hiddenBadgeUsers(env);
   if (p === '/v1/badges/prefs' && m === 'GET') return badgePrefs(env);
@@ -353,22 +353,16 @@ function sniffImage(bytes) {
   return null;
 }
 
-async function submitBadgeRequest(env, req, b) {
-  if (b.website) return json({ ok: true }, 201);
-  const discordId = String(b.discordId ?? '').trim();
-  if (!SNOWFLAKE_RE.test(discordId)) throw new HttpError(400, "That Discord ID doesn't look right. It's a number 17 to 20 digits long.");
-  const name = cleanText(b.name, 32, 'Your username');
-  const badge = cleanText(b.badge, 40, 'The badge name');
-  const details = cleanText(b.details, 1000, 'The extra info', true);
-  if (!name) throw new HttpError(400, 'Add your Discord username.');
-  if (!badge) throw new HttpError(400, 'Give the badge a name.');
+function badgePart(b, label = '') {
+  const badge = cleanText(b.badge, 40, `The ${label}badge name`);
+  if (!badge) throw new HttpError(400, `Give the ${label}badge a name.`);
   const colors = [...new Set((Array.isArray(b.colors) ? b.colors : []).map(c => String(c).trim().toLowerCase()))];
   if (!colors.length || colors.length > MAX_BADGE_COLORS || !colors.every(c => HEX_COLOR_RE.test(c))) {
-    throw new HttpError(400, `Pick between 1 and ${MAX_BADGE_COLORS} colors.`);
+    throw new HttpError(400, `Pick between 1 and ${MAX_BADGE_COLORS} colors${label ? ` for the ${label}badge` : ''}.`);
   }
   let image = null, imageType = null, preview = null;
   if (b.image) {
-    image = decodeUpload(b.image, MAX_BADGE_IMAGE_BYTES, 'That image is too big. Keep it under 1.5 MB.');
+    image = decodeUpload(b.image, MAX_BADGE_IMAGE_BYTES, `The ${label}badge image is too big. Keep it under 1.5 MB.`);
     imageType = sniffImage(image);
     if (!imageType) throw new HttpError(400, 'The image has to be a PNG, JPG, GIF or WebP.');
   }
@@ -376,12 +370,25 @@ async function submitBadgeRequest(env, req, b) {
     preview = decodeUpload(b.preview, MAX_BADGE_PREVIEW_BYTES, 'The badge preview is too big.');
     if (sniffImage(preview) !== 'image/png') preview = null;
   }
-  const design = cleanDesign(b.design);
+  return { badge, colors, image, imageType, preview, design: cleanDesign(b.design) };
+}
+
+const newBadgeId = () => [...crypto.getRandomValues(new Uint8Array(8))].map(x => x.toString(16).padStart(2, '0')).join('');
+
+async function submitBadgeRequest(env, req, b) {
+  if (b.website) return json({ ok: true }, 201);
+  const discordId = String(b.discordId ?? '').trim();
+  if (!SNOWFLAKE_RE.test(discordId)) throw new HttpError(400, "That Discord ID doesn't look right. It's a number 17 to 20 digits long.");
+  const name = cleanText(b.name, 32, 'Your username');
+  const details = cleanText(b.details, 1000, 'The extra info', true);
+  if (!name) throw new HttpError(400, 'Add your Discord username.');
+  const parts = [badgePart(b, b.pair ? 'first ' : '')];
+  if (b.pair) parts.push(badgePart(b.pair, 'second '));
   const now = Date.now();
   const ip = await sha256hex(`badge|${req.headers.get('cf-connecting-ip') || 'unknown'}|${env.TOKEN_SECRET || ''}`);
   const tester = (env.BADGE_TESTERS || '').split(',').map(s => s.trim()).includes(discordId);
   const recent = await env.DB.prepare(
-    'SELECT COALESCE(SUM(created > ?2), 0) AS hour, COUNT(*) AS day FROM badge_requests WHERE ip = ?1 AND created > ?3'
+    'SELECT COALESCE(SUM(created > ?2), 0) AS hour, COUNT(*) AS day FROM badge_requests WHERE ip = ?1 AND created > ?3 AND pair_of IS NULL'
   ).bind(ip, now - 3600000, now - 86400000).first();
   const [perHour, perDay] = tester ? [BADGE_TESTER_PER_HOUR, BADGE_TESTER_PER_HOUR * 24] : [BADGE_REQUESTS_PER_HOUR, BADGE_REQUESTS_PER_DAY];
   if (recent.hour >= perHour || recent.day >= perDay) {
@@ -390,12 +397,13 @@ async function submitBadgeRequest(env, req, b) {
   const waiting = tester ? null : await env.DB.prepare("SELECT id FROM badge_requests WHERE discord = ?1 AND status = 'new' AND created > ?2 LIMIT 1")
     .bind(discordId, now - 14 * 86400000).first();
   if (waiting) throw new HttpError(409, "There's already a request waiting for that account. Hang tight.");
-  const id = [...crypto.getRandomValues(new Uint8Array(8))].map(x => x.toString(16).padStart(2, '0')).join('');
-  await env.DB.prepare(
-    `INSERT INTO badge_requests (id, discord, name, badge, colors, details, image, image_type, source, ip, status, created, posted, design, preview)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'new', ?11, 0, ?12, ?13)`
-  ).bind(id, discordId, name, badge, JSON.stringify(colors), details, image ? image.buffer : null, imageType,
-    b.source === 'deadbolt' ? 'deadbolt' : 'web', ip, now, design ? JSON.stringify(design) : null, preview ? preview.buffer : null).run();
+  const id = newBadgeId();
+  const source = b.source === 'deadbolt' ? 'deadbolt' : 'web';
+  await env.DB.batch(parts.map((p, i) => env.DB.prepare(
+    `INSERT INTO badge_requests (id, discord, name, badge, colors, details, image, image_type, source, ip, status, created, posted, design, preview, pair_of)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'new', ?11, 0, ?12, ?13, ?14)`
+  ).bind(i ? newBadgeId() : id, discordId, name, p.badge, JSON.stringify(p.colors), details, p.image ? p.image.buffer : null, p.imageType,
+    source, ip, now, p.design ? JSON.stringify(p.design) : null, p.preview ? p.preview.buffer : null, i ? id : null)));
   return json({ ok: true, id }, 201);
 }
 
@@ -454,7 +462,7 @@ async function setBadgesHidden(env, req, b) {
   return hiddenBadgeUsers(env, 'no-store');
 }
 
-const BADGE_COLUMNS = 'id, discord, name, badge, colors, details, image_type, source, status, created, posted, design, preview IS NOT NULL AS has_preview';
+const BADGE_COLUMNS = 'id, discord, name, badge, colors, details, image_type, source, status, created, posted, design, preview IS NOT NULL AS has_preview, pair_of';
 
 const badgeRequestOut = r => ({
   id: r.id,
@@ -470,28 +478,38 @@ const badgeRequestOut = r => ({
   status: r.status,
   created: r.created,
   posted: !!r.posted,
+  pairOf: r.pair_of,
 });
+
+async function withPair(env, r) {
+  const out = badgeRequestOut(r);
+  if (!r.pair_of) {
+    const p = await env.DB.prepare(`SELECT ${BADGE_COLUMNS} FROM badge_requests WHERE pair_of = ?1`).bind(r.id).first();
+    if (p) out.pair = badgeRequestOut(p);
+  }
+  return out;
+}
 
 async function listBadgeRequests(env, req, url) {
   feedAllowed(env, req);
   const pending = url.searchParams.get('pending') === '1';
   const { results } = await env.DB.prepare(
-    `SELECT ${BADGE_COLUMNS} FROM badge_requests ${pending ? 'WHERE posted = 0 ORDER BY created ASC' : 'ORDER BY created DESC'} LIMIT 25`
+    `SELECT ${BADGE_COLUMNS} FROM badge_requests WHERE pair_of IS NULL ${pending ? 'AND posted = 0 ORDER BY created ASC' : 'ORDER BY created DESC'} LIMIT 25`
   ).all();
-  return json({ requests: results.map(badgeRequestOut) });
+  return json({ requests: await Promise.all(results.map(r => withPair(env, r))) });
 }
 
 async function getBadgeRequest(env, req, id) {
   feedAllowed(env, req);
   const r = await env.DB.prepare(`SELECT ${BADGE_COLUMNS} FROM badge_requests WHERE id = ?1`).bind(id).first();
   if (!r) throw new HttpError(404, 'No such request.');
-  return json(badgeRequestOut(r));
+  return json(await withPair(env, r));
 }
 
 async function updateBadgeRequest(env, req, id, b) {
   feedAllowed(env, req);
   if (b.status !== undefined && !BADGE_STATUSES.includes(b.status)) throw new HttpError(400, 'Unknown status.');
-  const r = await env.DB.prepare('UPDATE badge_requests SET status = COALESCE(?2, status), posted = COALESCE(?3, posted) WHERE id = ?1')
+  const r = await env.DB.prepare('UPDATE badge_requests SET status = COALESCE(?2, status), posted = COALESCE(?3, posted) WHERE id = ?1 OR pair_of = ?1')
     .bind(id, b.status ?? null, b.posted === undefined ? null : b.posted ? 1 : 0).run();
   if (!r.meta.changes) throw new HttpError(404, 'No such request.');
   return getBadgeRequest(env, req, id);
