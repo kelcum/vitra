@@ -27,6 +27,17 @@ const BADGE_STATUSES = ['new', 'approved', 'denied', 'done'];
 const PLUGIN_NAME_RE = /^[A-Za-z0-9 _.+-]{1,64}$/;
 const MAX_BREAKAGE_PLUGINS = 50;
 const BREAKAGE_ROWS_PER_DAY = 200;
+const ADMIN_ORIGIN = 'https://xan.gripe';
+const ADMIN_PAGE = 'https://xan.gripe/deadbolt/admin/';
+const ADMIN_CALLBACK = 'https://api.xan.gripe/v1/admin/auth/callback';
+const ADMIN_SESSION_MS = 7 * 86400000;
+const BADGE_REQUEST_ID_RE = /^[0-9a-f]{16}$/;
+const GH_REPO = 'kelcum/Deadbolt';
+const GH_BRANCH = 'main';
+const BADGE_DIR = 'src/plugins/_api/badges/requested';
+const BADGE_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
+const DEFAULT_DESIGN = { shape: 'circle', background: 'gradient', effects: ['shine'], speed: 1, zoom: 1, x: 0, y: 0, rotate: 0 };
+const MAX_BADGE_USERS = 20;
 
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -34,13 +45,13 @@ class HttpError extends Error {
 
 export default {
   async fetch(req, env, ctx) {
-    if (req.method === 'OPTIONS') return withCors(new Response(null, { status: 204 }));
+    if (req.method === 'OPTIONS') return withCors(new Response(null, { status: 204 }), req);
     try {
-      return withCors(await route(req, env, ctx, new URL(req.url)));
+      return withCors(await route(req, env, ctx, new URL(req.url)), req);
     } catch (e) {
-      if (e instanceof HttpError) return withCors(json({ error: e.message }, e.status));
+      if (e instanceof HttpError) return withCors(json({ error: e.message }, e.status), req);
       console.error(e && e.stack || e);
-      return withCors(json({ error: 'Something went wrong on our side.' }, 500));
+      return withCors(json({ error: 'Something went wrong on our side.' }, 500), req);
     }
   },
 };
@@ -66,12 +77,20 @@ async function route(req, env, ctx, url) {
   if (p === '/v1/badges/hidden' && m === 'POST') return setBadgesHidden(env, req, await body(req));
   if (p === '/v1/breakage' && m === 'POST') return reportBreakage(env, req, await body(req, 8192));
   if (p === '/v1/admin/breakage' && m === 'GET') return listBreakage(env, req);
+  if (p === '/v1/admin/auth/login' && m === 'GET') return adminLogin(env);
+  if (p === '/v1/admin/auth/callback' && m === 'GET') return adminCallbackPage();
+  if (p === '/v1/admin/auth/session' && m === 'POST') return adminSession(env, req, await body(req, 8192));
+  if (p === '/v1/admin/auth/logout' && m === 'POST') return adminLogout(req);
+  if (p === '/v1/admin/me' && m === 'GET') return adminMe(env, req);
+  if (p === '/v1/admin/badges' && m === 'GET') return listPublishedBadges(env, req);
+  if (p === '/v1/admin/badges' && m === 'POST') return publishBadge(env, req, await body(req, MAX_BADGE_BODY_BYTES * 2));
   let r;
   if ((r = p.match(/^\/v1\/admin\/badge-requests\/([0-9a-f]{16})$/))) {
     if (m === 'GET') return getBadgeRequest(env, req, r[1]);
     if (m === 'POST') return updateBadgeRequest(env, req, r[1], await body(req));
   }
   if ((r = p.match(/^\/v1\/admin\/badge-requests\/([0-9a-f]{16})\/(image|preview)$/)) && m === 'GET') return badgeRequestImage(env, req, r[1], r[2]);
+  if ((r = p.match(/^\/v1\/admin\/badges\/([0-9a-f]{16})$/)) && m === 'DELETE') return unpublishBadge(env, req, r[1]);
   if ((r = p.match(/^\/v1\/admin\/breakage\/(\d{1,8})$/)) && m === 'POST') return markBreakagePosted(env, req, Number(r[1]), await body(req));
   if ((r = p.match(/^\/v1\/players\/([0-9a-f]{32})$/)) && m === 'GET') return player(env, r[1]);
   if ((r = p.match(/^\/v1\/capes\/([0-9a-f]{20})\.png$/)) && m === 'GET') return capeImage(env, ctx, req, r[1]);
@@ -499,23 +518,25 @@ async function withPair(env, r) {
 }
 
 async function listBadgeRequests(env, req, url) {
-  feedAllowed(env, req);
+  await adminAllowed(env, req);
   const pending = url.searchParams.get('pending') === '1';
+  const status = BADGE_STATUSES.includes(url.searchParams.get('status')) ? url.searchParams.get('status') : null;
+  const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 25));
   const { results } = await env.DB.prepare(
-    `SELECT ${BADGE_COLUMNS} FROM badge_requests WHERE pair_of IS NULL ${pending ? 'AND posted = 0 ORDER BY created ASC' : 'ORDER BY created DESC'} LIMIT 25`
-  ).all();
+    `SELECT ${BADGE_COLUMNS} FROM badge_requests WHERE pair_of IS NULL AND (?1 IS NULL OR status = ?1) ${pending ? 'AND posted = 0 ORDER BY created ASC' : 'ORDER BY created DESC'} LIMIT ?2`
+  ).bind(status, limit).all();
   return json({ requests: await Promise.all(results.map(r => withPair(env, r))) });
 }
 
 async function getBadgeRequest(env, req, id) {
-  feedAllowed(env, req);
+  await adminAllowed(env, req);
   const r = await env.DB.prepare(`SELECT ${BADGE_COLUMNS} FROM badge_requests WHERE id = ?1`).bind(id).first();
   if (!r) throw new HttpError(404, 'No such request.');
   return json(await withPair(env, r));
 }
 
 async function updateBadgeRequest(env, req, id, b) {
-  feedAllowed(env, req);
+  await adminAllowed(env, req);
   if (b.status !== undefined && !BADGE_STATUSES.includes(b.status)) throw new HttpError(400, 'Unknown status.');
   const r = await env.DB.prepare('UPDATE badge_requests SET status = COALESCE(?2, status), posted = COALESCE(?3, posted) WHERE id = ?1 OR pair_of = ?1')
     .bind(id, b.status ?? null, b.posted === undefined ? null : b.posted ? 1 : 0).run();
@@ -524,7 +545,7 @@ async function updateBadgeRequest(env, req, id, b) {
 }
 
 async function badgeRequestImage(env, req, id, which) {
-  feedAllowed(env, req);
+  await adminAllowed(env, req);
   const r = await env.DB.prepare('SELECT image, image_type, preview FROM badge_requests WHERE id = ?1').bind(id).first();
   const bytes = which === 'preview' ? r?.preview : r?.image || (r?.image_type && await (await env.BADGE_IMAGES.get(`requests/${id}`))?.arrayBuffer());
   if (!bytes) throw new HttpError(404, 'No image.');
@@ -577,6 +598,310 @@ async function markBreakagePosted(env, req, build, b) {
   return json({ ok: true });
 }
 
+const cookieOf = (req, name) => (req.headers.get('cookie') || '').split(/;\s*/).find(c => c.startsWith(name + '='))?.slice(name.length + 1) || '';
+const adminCookie = (name, value, path, maxAge) => `${name}=${value}; Path=${path}; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
+
+async function ownerSession(env, req) {
+  const claims = await verifySigned(env, cookieOf(req, 'db_admin'));
+  return claims?.k === 'admin' && env.BADGE_OWNER && claims.d === env.BADGE_OWNER ? claims : null;
+}
+
+async function adminAllowed(env, req, feed = true) {
+  if (feed && secretMatches(env.BADGE_FEED_KEY || '', req.headers.get('x-feed-key') || '')) return;
+  if (req.method !== 'GET' && req.headers.get('origin') !== ADMIN_ORIGIN) throw new HttpError(403, 'Not allowed.');
+  if (!await ownerSession(env, req)) throw new HttpError(401, 'Log in to keep going.');
+}
+
+function adminLogin(env) {
+  if (!env.DISCORD_CLIENT_ID) throw new HttpError(503, "Discord login isn't set up yet.");
+  const state = newBadgeId() + newBadgeId();
+  const q = new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, response_type: 'token', redirect_uri: ADMIN_CALLBACK, scope: 'identify', state, prompt: 'none' });
+  return new Response(null, {
+    status: 302,
+    headers: { location: `https://discord.com/oauth2/authorize?${q}`, 'set-cookie': adminCookie('db_state', state, '/v1/admin/auth', 600), 'cache-control': 'no-store' },
+  });
+}
+
+const CALLBACK_HTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark"><meta name="robots" content="noindex">
+<title>Signing in - Deadbolt</title>
+<style>
+html,body{height:100%;margin:0}
+body{display:grid;place-items:center;background:#08090c;color:#aab3be;font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.box{display:grid;justify-items:center;gap:18px}
+.ring{width:42px;height:42px;border-radius:50%;border:3px solid rgba(255,255,255,.08);border-top-color:#c9c0ff;animation:s .8s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ring{animation:none}}
+</style></head>
+<body><div class="box"><div class="ring"></div><div>Signing you in&hellip;</div></div>
+<script>
+(() => {
+  const page = ${JSON.stringify(ADMIN_PAGE)};
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const query = new URLSearchParams(location.search);
+  history.replaceState(null, "", location.pathname);
+  const fail = code => location.replace(page + "?login=" + encodeURIComponent(code));
+  if (!hash.get("access_token")) return fail(hash.get("error") || query.get("error") || "cancelled");
+  fetch("/v1/admin/auth/session", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: hash.get("access_token"), state: hash.get("state") })
+  }).then(r => r.ok ? location.replace(page) : fail(r.status === 403 ? "not_owner" : r.status === 400 ? "expired" : "failed"), () => fail("failed"));
+})();
+</script></body></html>`;
+
+function adminCallbackPage() {
+  return new Response(CALLBACK_HTML, {
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+      'referrer-policy': 'no-referrer',
+      'content-security-policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'",
+    },
+  });
+}
+
+async function adminSession(env, req, b) {
+  const state = cookieOf(req, 'db_state');
+  if (!state || !secretMatches(state, String(b.state || ''))) throw new HttpError(400, 'That login link expired. Try again.');
+  const token = String(b.token || '');
+  if (!/^[A-Za-z0-9._-]{10,200}$/.test(token)) throw new HttpError(400, "Discord didn't send a login token.");
+  const res = await fetch('https://discord.com/api/v10/users/@me', { headers: { authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new HttpError(401, "Discord didn't accept that login. Try again.");
+  const u = await res.json();
+  if (!env.BADGE_OWNER || u.id !== env.BADGE_OWNER) throw new HttpError(403, 'This page is only for the owner of Deadbolt.');
+  const session = await sign(env, {
+    k: 'admin',
+    d: u.id,
+    n: encodeURIComponent(u.global_name || u.username || ''),
+    a: /^(a_)?[0-9a-f]{32}$/.test(u.avatar || '') ? u.avatar : '',
+    e: Date.now() + ADMIN_SESSION_MS,
+  });
+  const out = json({ ok: true }, 200, { 'cache-control': 'no-store' });
+  out.headers.append('set-cookie', adminCookie('db_admin', session, '/v1/admin', ADMIN_SESSION_MS / 1000));
+  out.headers.append('set-cookie', adminCookie('db_state', '', '/v1/admin/auth', 0));
+  return out;
+}
+
+function adminLogout(req) {
+  if (req.headers.get('origin') !== ADMIN_ORIGIN) throw new HttpError(403, 'Not allowed.');
+  return json({ ok: true }, 200, { 'cache-control': 'no-store', 'set-cookie': adminCookie('db_admin', '', '/v1/admin', 0) });
+}
+
+async function adminMe(env, req) {
+  const s = await ownerSession(env, req);
+  if (!s) throw new HttpError(401, 'Not logged in.');
+  const avatar = s.a ? `https://cdn.discordapp.com/avatars/${s.d}/${s.a}.${s.a.startsWith('a_') ? 'gif' : 'png'}?size=128` : null;
+  return json({ id: s.d, name: decodeURIComponent(s.n || ''), avatar, expires: s.e }, 200, { 'cache-control': 'no-store' });
+}
+
+class GitHubError extends HttpError {
+  constructor(status, message) { super(502, `GitHub said ${status}: ${message}`); this.gh = status; }
+}
+
+async function gh(env, path, init = {}) {
+  if (!env.GITHUB_TOKEN) throw new HttpError(503, "Publishing isn't set up yet. The GitHub token is missing.");
+  const res = await fetch(`https://api.github.com/repos/${GH_REPO}${path}`, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      accept: 'application/vnd.github+json',
+      'x-github-api-version': '2022-11-28',
+      'user-agent': 'vitra-api',
+      ...(init.body ? { 'content-type': 'application/json' } : {}),
+    },
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new GitHubError(res.status, data?.message || 'no details');
+  return data;
+}
+
+const bytesB64 = bytes => {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+
+async function readPublishedBadges(env) {
+  const head = (await gh(env, `/git/ref/heads/${GH_BRANCH}`)).object.sha;
+  const files = await gh(env, `/contents/${BADGE_DIR}?ref=${head}`);
+  const file = files.find(f => f.name === 'badges.json');
+  const entries = file ? JSON.parse(new TextDecoder().decode(b64bytes((await gh(env, `/git/blobs/${file.sha}`)).content.replace(/\s/g, '')))) : [];
+  return { head, files: files.map(f => f.name), entries };
+}
+
+function badgesJson(value, indent = '', lead = 0) {
+  const inner = indent + '    ';
+  if (Array.isArray(value)) {
+    if (!value.length) return '[]';
+    if (value.every(v => v === null || typeof v !== 'object')) {
+      const flat = `[${value.map(v => JSON.stringify(v)).join(', ')}]`;
+      if (lead + flat.length + 1 <= 100) return flat;
+    }
+    return `[\n${value.map(v => inner + badgesJson(v, inner, inner.length)).join(',\n')}\n${indent}]`;
+  }
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value);
+    if (!keys.length) return '{}';
+    return `{\n${keys.map(k => {
+      const head = `${inner}${JSON.stringify(k)}: `;
+      return head + badgesJson(value[k], inner, head.length);
+    }).join(',\n')}\n${indent}}`;
+  }
+  return JSON.stringify(value);
+}
+
+const importOrder = line => line.match(/\d+|\D+/g).map(t => /^\d/.test(t) ? [0, Number(t), ''] : [1, 0, t.toLowerCase()]);
+const compareImports = (a, b) => {
+  const x = importOrder(a), y = importOrder(b);
+  for (let i = 0; i < Math.min(x.length, y.length); i++) {
+    for (let j = 0; j < 3; j++) if (x[i][j] !== y[i][j]) return x[i][j] < y[i][j] ? -1 : 1;
+  }
+  return x.length - y.length;
+};
+
+function badgesTs(entries) {
+  const imports = [], items = [];
+  for (const e of entries) {
+    let image = 'null';
+    if (e.image) {
+      const v = `img_${e.id}`;
+      imports.push(`import ${v} from "file://${e.image}?base64";`);
+      image = `\`data:${e.imageType};base64,\${${v}}\``;
+    }
+    const d = e.design;
+    const design = [
+      `shape: "${d.shape}"`,
+      `background: "${d.background}"`,
+      `colors: [${e.colors.map(c => '0x' + c.replace('#', '').toLowerCase()).join(', ')}]`,
+      `effects: [${d.effects.map(x => JSON.stringify(x)).join(', ')}]`,
+      ...['speed', 'zoom', 'x', 'y', 'rotate'].map(k => `${k}: ${JSON.stringify(d[k])}`),
+    ].join(', ');
+    items.push(`    {\n        id: "${e.id}",\n        users: [${e.users.map(u => JSON.stringify(u)).join(', ')}],\n        name: ${JSON.stringify(e.name)},\n        image: ${image},\n        design: { ${design} },\n    },`);
+  }
+  const out = ['/*\n * Deadbolt, a Discord client mod\n * Copyright (c) 2026 k3 and contributors\n * SPDX-License-Identifier: GPL-3.0-or-later\n */\n'];
+  if (imports.length) out.push(...imports.sort(compareImports), '');
+  out.push('import type { RequestedBadgeEntry } from "../requestedBadges";', '');
+  if (items.length) out.push('export const requestedBadges: RequestedBadgeEntry[] = [', ...items, '];');
+  else out.push('export const requestedBadges: RequestedBadgeEntry[] = [];');
+  return out.join('\n') + '\n';
+}
+
+async function commitBadges(env, images, change) {
+  const blobs = await Promise.all(images.map(async img => ({
+    name: img.name,
+    sha: (await gh(env, '/git/blobs', { method: 'POST', body: JSON.stringify({ content: bytesB64(img.bytes), encoding: 'base64' }) })).sha,
+  })));
+  const keep = new Set(blobs.map(b => b.name));
+  for (let attempt = 0; ; attempt++) {
+    const { head, files, entries } = await readPublishedBadges(env);
+    const { next, drop, message } = change(entries);
+    const path = name => `${BADGE_DIR}/${name}`;
+    const tree = [
+      ...files.filter(n => !keep.has(n) && drop.some(id => n.startsWith(id + '.'))).map(n => ({ path: path(n), mode: '100644', type: 'blob', sha: null })),
+      ...blobs.map(b => ({ path: path(b.name), mode: '100644', type: 'blob', sha: b.sha })),
+      { path: path('badges.json'), mode: '100644', type: 'blob', content: badgesJson(next) + '\n' },
+      { path: path('badges.ts'), mode: '100644', type: 'blob', content: badgesTs(next) },
+    ];
+    const base = (await gh(env, `/git/commits/${head}`)).tree.sha;
+    const t = await gh(env, '/git/trees', { method: 'POST', body: JSON.stringify({ base_tree: base, tree }) });
+    const c = await gh(env, '/git/commits', { method: 'POST', body: JSON.stringify({ message, tree: t.sha, parents: [head] }) });
+    try {
+      await gh(env, `/git/refs/heads/${GH_BRANCH}`, { method: 'PATCH', body: JSON.stringify({ sha: c.sha }) });
+      return { commit: c.sha, entries: next };
+    } catch (e) {
+      if (!(e instanceof GitHubError) || e.gh !== 422 || attempt >= 2) throw e;
+    }
+  }
+}
+
+async function listPublishedBadges(env, req) {
+  await adminAllowed(env, req, false);
+  const { head, entries } = await readPublishedBadges(env);
+  return json({ commit: head, base: `https://raw.githubusercontent.com/${GH_REPO}/${head}/${BADGE_DIR}/`, badges: entries }, 200, { 'cache-control': 'no-store' });
+}
+
+async function requestImage(env, row) {
+  if (row.image) return new Uint8Array(row.image);
+  const obj = await env.BADGE_IMAGES.get(`requests/${row.id}`);
+  if (!obj) throw new HttpError(404, "That request's image is gone.");
+  return new Uint8Array(await obj.arrayBuffer());
+}
+
+async function publishBadge(env, req, b) {
+  await adminAllowed(env, req, false);
+  const users = [...new Set((Array.isArray(b.users) ? b.users : []).map(u => String(u).trim()))];
+  if (!users.length || users.length > MAX_BADGE_USERS || !users.every(u => SNOWFLAKE_RE.test(u))) {
+    throw new HttpError(400, "Add the Discord ID of who gets the badge. It's a number 17 to 20 digits long.");
+  }
+  const raw = Array.isArray(b.parts) ? b.parts : [];
+  if (raw.length < 1 || raw.length > 2) throw new HttpError(400, 'Send one badge or a matching pair.');
+  let rows = [];
+  if (b.requestId !== undefined && b.requestId !== null) {
+    const id = String(b.requestId);
+    if (!BADGE_REQUEST_ID_RE.test(id)) throw new HttpError(400, 'That request ID looks wrong.');
+    rows = (await env.DB.prepare('SELECT id, name, badge, image, image_type, pair_of FROM badge_requests WHERE id = ?1 OR pair_of = ?1 ORDER BY pair_of IS NOT NULL')
+      .bind(id).all()).results;
+    if (!rows.length || rows[0].pair_of) throw new HttpError(404, 'No such request.');
+    if (rows.length !== raw.length) throw new HttpError(400, rows.length > 1 ? 'That request is a matching pair, so publish both badges.' : 'That request is a single badge.');
+  }
+  const forName = cleanText(b.for, 32, 'The username') || rows[0]?.name || users[0];
+  const pair = raw.length > 1;
+  const parts = await Promise.all(raw.map(async (p, i) => {
+    const fromRequest = p?.image === 'request';
+    const part = badgePart({ ...p, image: fromRequest ? undefined : p?.image, preview: undefined }, pair ? (i ? 'second ' : 'first ') : '');
+    const row = rows[i];
+    let image = part.image, imageType = part.imageType;
+    if (fromRequest) {
+      if (!row?.image_type) throw new HttpError(400, "That request doesn't have an image.");
+      image = await requestImage(env, row);
+      imageType = sniffImage(image);
+      if (!imageType) throw new HttpError(400, "That request's image isn't a PNG, JPG, GIF or WebP.");
+    }
+    const id = row ? row.id : BADGE_REQUEST_ID_RE.test(String(p?.id || '')) ? p.id : newBadgeId();
+    return { id, name: part.badge, requested: row?.badge ?? part.badge, colors: part.colors, design: { ...DEFAULT_DESIGN, ...(part.design || {}) }, image, imageType };
+  }));
+  if (pair && parts[0].id === parts[1].id) parts[1].id = newBadgeId();
+  const entries = await Promise.all(parts.map(async (p, i) => {
+    const request = { badge: p.requested, for: forName };
+    if (pair) request.pair = parts[1 - i].id;
+    const e = { id: p.id, users, name: p.name, colors: p.colors, image: p.image ? `${p.id}.${BADGE_EXT[p.imageType]}` : null, imageType: p.image ? p.imageType : null, design: p.design, request };
+    if (p.image) {
+      const hash = await crypto.subtle.digest('SHA-256', p.image);
+      e.imageHash = [...new Uint8Array(hash)].map(x => x.toString(16).padStart(2, '0')).join('').slice(0, 16);
+    }
+    return e;
+  }));
+  const names = entries.map(e => `"${e.name}"`);
+  const message = `Add ${forName}'s ${names.join(' and ')} badge${pair ? 's' : ''}`;
+  const images = parts.filter(p => p.image).map(p => ({ name: `${p.id}.${BADGE_EXT[p.imageType]}`, bytes: p.image }));
+  const result = await commitBadges(env, images, list => {
+    const ids = new Set(entries.map(e => e.id));
+    const next = [...list];
+    for (const e of entries) {
+      const at = next.findIndex(x => x.id === e.id);
+      if (at >= 0) next[at] = e;
+      else next.push(e);
+    }
+    return { next, drop: [...ids], message };
+  });
+  if (rows.length) await env.DB.prepare("UPDATE badge_requests SET status = 'done' WHERE id = ?1 OR pair_of = ?1").bind(rows[0].id).run();
+  return json({ commit: result.commit, badges: entries }, 201);
+}
+
+async function unpublishBadge(env, req, id) {
+  await adminAllowed(env, req, false);
+  let gone = [];
+  const result = await commitBadges(env, [], list => {
+    gone = list.filter(e => e.id === id || e.request?.pair === id);
+    if (!gone.some(e => e.id === id)) throw new HttpError(404, "That badge isn't published.");
+    const names = gone.map(e => `"${e.name}"`);
+    return { next: list.filter(e => !gone.includes(e)), drop: gone.map(e => e.id), message: `Remove the ${names.join(' and ')} badge${gone.length > 1 ? 's' : ''}` };
+  });
+  return json({ commit: result.commit, removed: gone.map(e => e.id) });
+}
+
 const bearer = req => (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
 
 async function body(req, max = MAX_PNG_BYTES * 1.4 + 4096) {
@@ -588,9 +913,15 @@ function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', ...headers } });
 }
 
-function withCors(res) {
+function withCors(res, req) {
   const r = new Response(res.body, res);
-  r.headers.set('access-control-allow-origin', '*');
+  if (req.headers.get('origin') === ADMIN_ORIGIN) {
+    r.headers.set('access-control-allow-origin', ADMIN_ORIGIN);
+    r.headers.set('access-control-allow-credentials', 'true');
+  } else {
+    r.headers.set('access-control-allow-origin', '*');
+  }
+  r.headers.append('vary', 'Origin');
   r.headers.set('access-control-allow-headers', 'content-type, authorization');
   r.headers.set('access-control-allow-methods', 'GET, POST, PUT, DELETE, OPTIONS');
   return r;
@@ -611,16 +942,16 @@ async function sign(env, claims) {
   return payload + '.' + await hmac(env, payload);
 }
 
-async function verifyToken(env, token) {
+async function verifySigned(env, token) {
   const [payload, sig] = String(token).split('.');
-  if (!payload || !sig) return null;
-  const expected = await hmac(env, payload);
-  if (expected.length !== sig.length) return null;
-  let diff = 0;
-  for (let i = 0; i < sig.length; i++) diff |= sig.charCodeAt(i) ^ expected.charCodeAt(i);
-  if (diff) return null;
+  if (!payload || !sig || !secretMatches(await hmac(env, payload), sig)) return null;
   try {
     const claims = JSON.parse(unb64url(payload));
-    return claims.e > Date.now() && UUID_RE.test(claims.u) ? claims : null;
+    return claims.e > Date.now() ? claims : null;
   } catch { return null; }
+}
+
+async function verifyToken(env, token) {
+  const claims = await verifySigned(env, token);
+  return claims && UUID_RE.test(claims.u) ? claims : null;
 }
