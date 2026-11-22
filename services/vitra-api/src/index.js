@@ -39,6 +39,10 @@ const BADGE_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif',
 const DEFAULT_DESIGN = { shape: 'circle', background: 'gradient', effects: ['shine'], speed: 1, zoom: 1, x: 0, y: 0, rotate: 0 };
 const MAX_BADGE_USERS = 20;
 
+const NOW_PLAYING_FRESH_MS = 90 * 1000;
+const NOW_PLAYING_PREVIEW_MS = 10 * 60 * 1000;
+const MAX_NOW_PLAYING_BYTES = 16384;
+
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -68,6 +72,8 @@ async function route(req, env, ctx, url) {
   if (p === '/v1/me' && m === 'DELETE') return deleteMe(env, await body(req));
   if (p === '/v1/presets' && m === 'GET') return presets(env);
   if (p === '/v1/stats' && m === 'GET') return stats(env);
+  if (p === '/v1/nowplaying' && m === 'GET') return getNowPlaying(env);
+  if (p === '/v1/nowplaying' && m === 'PUT') return putNowPlaying(env, req, await body(req, MAX_NOW_PLAYING_BYTES));
   if (p === '/v1/me/cape' && m === 'PUT') return setCape(env, await body(req));
   if (p === '/v1/badge-requests' && m === 'POST') return submitBadgeRequest(env, req, await body(req, MAX_BADGE_BODY_BYTES * 2));
   if (p === '/v1/admin/badge-requests' && m === 'GET') return listBadgeRequests(env, req, url);
@@ -433,6 +439,96 @@ async function submitBadgeRequest(env, req, b) {
   ).bind(ids[i], discordId, name, p.badge, JSON.stringify(p.colors), details, null, p.imageType,
     source, ip, now, p.design ? JSON.stringify(p.design) : null, p.preview ? p.preview.buffer : null, i ? id : null)));
   return json({ ok: true, id }, 201);
+}
+
+function npText(v, max) {
+  return typeof v === 'string' ? v.trim().slice(0, max) : '';
+}
+
+function npUrl(v) {
+  return typeof v === 'string' && /^https:\/\/[^\s"'<>]{1,1000}$/.test(v) ? v : null;
+}
+
+function npMs(v) {
+  return Number.isFinite(v) && v >= 0 && v < 24 * 3600 * 1000 ? Math.round(v) : null;
+}
+
+async function readNowPlaying(env) {
+  const row = await env.DB.prepare('SELECT data, updated FROM now_playing WHERE id = ?1').bind('k3').first();
+  if (!row) return { track: null, updated: 0 };
+  try {
+    return { track: JSON.parse(row.data), updated: row.updated };
+  } catch {
+    return { track: null, updated: row.updated };
+  }
+}
+
+async function deezerPreview(artist, title) {
+  const first = artist.split(/,|&| feat\.? | ft\.? | x /i)[0].trim();
+  const clean = title.replace(/\s*[([](feat|ft|with|prod)[^)\]]*[)\]]/gi, '').trim();
+  const norm = v => String(v || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/\s*[([](feat|ft|with|prod|remaster|explicit)[^)\]]*[)\]]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const wantTitle = norm(clean);
+  const wantArtist = norm(first);
+  if (!wantTitle || !wantArtist) return null;
+  try {
+    const res = await fetch('https://api.deezer.com/search?limit=15&q=' + encodeURIComponent(`${first} ${clean}`));
+    if (!res.ok) return null;
+    const data = await res.json();
+    const hits = (data.data || []).filter(h => typeof h.preview === 'string' && h.preview.startsWith('https://'));
+    const artistOk = h => norm(h.artist && h.artist.name).includes(wantArtist) || wantArtist.includes(norm(h.artist && h.artist.name));
+    const hit = hits.find(h => norm(h.title) === wantTitle && artistOk(h))
+      || hits.find(h => norm(h.title_short) === wantTitle && artistOk(h));
+    return hit ? hit.preview : null;
+  } catch {
+    return null;
+  }
+}
+
+async function putNowPlaying(env, req, b) {
+  if (!secretMatches(env.NOWPLAYING_KEY || '', bearer(req) || '')) throw new HttpError(403, 'Not allowed.');
+  const now = Date.now();
+  const save = (track) => env.DB
+    .prepare('INSERT INTO now_playing (id, data, updated) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated = excluded.updated')
+    .bind('k3', JSON.stringify(track), now)
+    .run();
+  const t = b && b.track;
+  if (!t || typeof t !== 'object') {
+    await save(null);
+    return json({ ok: true });
+  }
+  const track = {
+    title: npText(t.title, 300),
+    artist: npText(t.artist, 300),
+    album: npText(t.album, 300),
+    source: npText(t.source, 40),
+    cover: npUrl(t.cover),
+    link: npUrl(t.link),
+    playing: t.playing === true,
+    position_ms: npMs(t.position_ms),
+    duration_ms: npMs(t.duration_ms),
+    preview: null,
+    preview_at: 0,
+  };
+  if (!track.title) throw new HttpError(400, 'Missing title.');
+  const prev = (await readNowPlaying(env)).track;
+  if (prev && prev.preview && prev.title === track.title && prev.artist === track.artist && now - (prev.preview_at || 0) < NOW_PLAYING_PREVIEW_MS) {
+    track.preview = prev.preview || null;
+    track.preview_at = prev.preview_at || 0;
+  } else {
+    track.preview = await deezerPreview(track.artist, track.title);
+    track.preview_at = now;
+  }
+  await save(track);
+  return json({ ok: true });
+}
+
+async function getNowPlaying(env) {
+  const { track, updated } = await readNowPlaying(env);
+  const now = Date.now();
+  const headers = { 'cache-control': 'no-store' };
+  if (!track || now - updated > NOW_PLAYING_FRESH_MS) return json({ active: false, now }, 200, headers);
+  const { preview_at, ...shown } = track;
+  return json({ active: true, now, updated, track: shown }, 200, headers);
 }
 
 function secretMatches(want, got) {

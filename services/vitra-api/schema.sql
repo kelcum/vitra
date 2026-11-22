@@ -80,3 +80,9 @@ CREATE TABLE IF NOT EXISTS breakage_reports (
 );
 
 CREATE INDEX IF NOT EXISTS breakage_reports_ip ON breakage_reports (ip, created);
+
+CREATE TABLE IF NOT EXISTS now_playing (
+  id      TEXT PRIMARY KEY,
+  data    TEXT NOT NULL,
+  updated INTEGER NOT NULL
+);
