@@ -86,3 +86,27 @@ CREATE TABLE IF NOT EXISTS now_playing (
   data    TEXT NOT NULL,
   updated INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS badge_shares (
+  id         TEXT PRIMARY KEY,
+  requester  TEXT NOT NULL,
+  owner      TEXT NOT NULL,
+  badge      TEXT NOT NULL,
+  badge_name TEXT NOT NULL,
+  pair       TEXT,
+  pair_name  TEXT,
+  note       TEXT NOT NULL,
+  status     TEXT NOT NULL DEFAULT 'pending',
+  created    INTEGER NOT NULL,
+  decided    INTEGER NOT NULL DEFAULT 0,
+  posted     INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS badge_shares_requester ON badge_shares (requester, created);
+CREATE INDEX IF NOT EXISTS badge_shares_owner ON badge_shares (owner, status);
+CREATE INDEX IF NOT EXISTS badge_shares_pending ON badge_shares (status, posted, created);
+
+CREATE TABLE IF NOT EXISTS badge_share_optout (
+  user_id TEXT PRIMARY KEY,
+  updated INTEGER NOT NULL
+);

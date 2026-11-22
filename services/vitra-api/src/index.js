@@ -37,7 +37,11 @@ const GH_BRANCH = 'main';
 const BADGE_DIR = 'src/plugins/_api/badges/requested';
 const BADGE_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 const DEFAULT_DESIGN = { shape: 'circle', background: 'gradient', effects: ['shine'], speed: 1, zoom: 1, x: 0, y: 0, rotate: 0 };
-const MAX_BADGE_USERS = 20;
+const MAX_BADGE_USERS = 100;
+const SHARE_SESSION_MS = 30 * 86400000;
+const SHARE_TTL_MS = 7 * 86400000;
+const SHARE_MAX_PENDING = 3;
+const SHARE_ID_RE = /^[0-9a-f]{16}$/;
 
 const NOW_PLAYING_FRESH_MS = 90 * 1000;
 const NOW_PLAYING_PREVIEW_MS = 10 * 60 * 1000;
@@ -91,6 +95,11 @@ async function route(req, env, ctx, url) {
   if (p === '/v1/admin/badges' && m === 'GET') return listPublishedBadges(env, req);
   if (p === '/v1/admin/badges' && m === 'POST') return publishBadge(env, ctx, req, await body(req, MAX_BADGE_BODY_BYTES * 2));
   if (p === '/v1/badges/published' && m === 'GET') return publishedBadges(env, ctx);
+  if (p === '/v1/badge-shares/session' && m === 'POST') return shareSession(env, await body(req, 8192));
+  if (p === '/v1/badge-shares' && m === 'GET') return myShares(env, req);
+  if (p === '/v1/badge-shares' && m === 'POST') return requestShare(env, req, await body(req, 8192));
+  if (p === '/v1/admin/badge-shares' && m === 'GET') return listShares(env, req, url);
+  if (p === '/v1/admin/badge-share-optout' && m === 'POST') return setShareOptOut(env, req, await body(req, 8192));
   let r;
   if ((r = p.match(/^\/v1\/admin\/badge-requests\/([0-9a-f]{16})$/))) {
     if (m === 'GET') return getBadgeRequest(env, req, r[1]);
@@ -98,6 +107,12 @@ async function route(req, env, ctx, url) {
   }
   if ((r = p.match(/^\/v1\/admin\/badge-requests\/([0-9a-f]{16})\/(image|preview)$/)) && m === 'GET') return badgeRequestImage(env, req, r[1], r[2]);
   if ((r = p.match(/^\/v1\/admin\/badges\/([0-9a-f]{16})$/)) && m === 'DELETE') return unpublishBadge(env, ctx, req, r[1]);
+  if ((r = p.match(/^\/v1\/badge-shares\/([0-9a-f]{16})$/)) && m === 'DELETE') return revokeOwnShare(env, ctx, req, r[1]);
+  if ((r = p.match(/^\/v1\/admin\/badge-shares\/([0-9a-f]{16})$/))) {
+    if (m === 'POST') return decideShare(env, ctx, req, r[1], await body(req, 8192));
+    if (m === 'DELETE') return adminRevokeShare(env, ctx, req, r[1]);
+  }
+  if ((r = p.match(/^\/v1\/admin\/badge-shares\/([0-9a-f]{16})\/image\/([01])$/)) && m === 'GET') return shareImage(env, req, r[1], Number(r[2]));
   if ((r = p.match(/^\/v1\/admin\/breakage\/(\d{1,8})$/)) && m === 'POST') return markBreakagePosted(env, req, Number(r[1]), await body(req));
   if ((r = p.match(/^\/v1\/players\/([0-9a-f]{32})$/)) && m === 'GET') return player(env, r[1]);
   if ((r = p.match(/^\/v1\/capes\/([0-9a-f]{20})\.png$/)) && m === 'GET') return capeImage(env, ctx, req, r[1]);
@@ -990,6 +1005,8 @@ async function publishBadge(env, ctx, req, b) {
     for (const e of entries) {
       const at = next.findIndex(x => x.id === e.id);
       if (at >= 0 && !rows.length && next[at].request) e.request = { ...next[at].request, ...(e.request.pair ? { pair: e.request.pair } : {}) };
+      const shared = at >= 0 ? (next[at].shared || []).filter(u => e.users.includes(u)) : [];
+      if (shared.length) e.shared = shared;
       if (at >= 0) next[at] = e;
       else next.push(e);
     }
@@ -1011,6 +1028,195 @@ async function unpublishBadge(env, ctx, req, id) {
   });
   ctx.waitUntil(caches.default.delete(PUBLISHED_KEY));
   return json({ commit: result.commit, removed: gone.map(e => e.id) });
+}
+
+const SHARE_COLUMNS = 'id, requester, owner, badge, badge_name, pair, pair_name, note, status, created, decided, posted';
+
+const shareOut = r => ({
+  id: r.id,
+  requester: r.requester,
+  owner: r.owner,
+  badge: r.badge,
+  badgeName: r.badge_name,
+  pair: r.pair,
+  pairName: r.pair_name,
+  note: r.note,
+  status: r.status === 'pending' && r.created < Date.now() - SHARE_TTL_MS ? 'expired' : r.status,
+  created: r.created,
+  decided: r.decided || null,
+  delivered: r.posted === 1,
+});
+
+async function shareUser(env, req) {
+  const claims = await verifySigned(env, bearer(req));
+  if (claims?.k !== 'share' || !SNOWFLAKE_RE.test(claims.d || '')) throw new HttpError(401, 'Link your Discord account to Deadbolt first.');
+  return claims.d;
+}
+
+async function shareSession(env, b) {
+  const token = String(b?.token || '');
+  if (!/^[A-Za-z0-9._-]{10,200}$/.test(token)) throw new HttpError(400, "Discord didn't send a login token.");
+  const res = await fetch('https://discord.com/api/v10/oauth2/@me', { headers: { authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new HttpError(401, "Discord didn't accept that login. Try again.");
+  const info = await res.json();
+  if (!env.DISCORD_CLIENT_ID || info.application?.id !== env.DISCORD_CLIENT_ID || !SNOWFLAKE_RE.test(info.user?.id || '')) {
+    throw new HttpError(401, "That login wasn't for Deadbolt. Try again.");
+  }
+  const expires = Date.now() + SHARE_SESSION_MS;
+  return json({ token: await sign(env, { k: 'share', d: info.user.id, e: expires }), userId: info.user.id, expires }, 200, { 'cache-control': 'no-store' });
+}
+
+async function shareOptedOut(env, userId) {
+  return !!await env.DB.prepare('SELECT 1 FROM badge_share_optout WHERE user_id = ?1').bind(userId).first();
+}
+
+async function myShares(env, req) {
+  const me = await shareUser(env, req);
+  const { results } = await env.DB.prepare(`SELECT ${SHARE_COLUMNS} FROM badge_shares WHERE requester = ?1 OR (owner = ?1 AND status = 'accepted') ORDER BY created DESC LIMIT 200`).bind(me).all();
+  return json({
+    userId: me,
+    sent: results.filter(r => r.requester === me).map(shareOut),
+    shared: results.filter(r => r.owner === me && r.status === 'accepted').map(shareOut),
+    optedOut: await shareOptedOut(env, me),
+  }, 200, { 'cache-control': 'no-store' });
+}
+
+async function requestShare(env, req, b) {
+  const me = await shareUser(env, req);
+  const owner = String(b?.owner ?? '');
+  const badgeId = String(b?.badge ?? '');
+  if (!SNOWFLAKE_RE.test(owner) || !SHARE_ID_RE.test(badgeId)) throw new HttpError(400, 'Pick a badge on someone\'s profile to ask for.');
+  if (owner === me) throw new HttpError(400, 'That badge is already yours.');
+  const note = cleanText(b.note, 200, 'The note', true);
+  const { entries } = await readPublishedBadges(env);
+  const entry = entries.find(e => e.id === badgeId);
+  if (!entry) throw new HttpError(404, "That badge isn't around anymore.");
+  const owns = e => e.users.includes(owner) && !(e.shared || []).includes(owner);
+  if (!owns(entry)) throw new HttpError(400, "That person doesn't own this badge, so they can't share it.");
+  if (entry.users.includes(me)) throw new HttpError(409, 'You already have this badge.');
+  const pairEntry = entry.request?.pair ? entries.find(e => e.id === entry.request.pair && owns(e)) : null;
+  if (await shareOptedOut(env, owner)) throw new HttpError(403, "They've turned off badge share requests.");
+  const now = Date.now();
+  const counts = await env.DB.prepare(
+    "SELECT COALESCE(SUM(status = 'pending' AND created > ?2), 0) AS pending, COALESCE(SUM(badge IN (?3, ?4) OR pair IN (?3, ?4)), 0) AS same FROM badge_shares WHERE requester = ?1 AND created > ?2"
+  ).bind(me, now - SHARE_TTL_MS, badgeId, pairEntry?.id ?? badgeId).first();
+  if (counts.same) throw new HttpError(429, 'You already asked for this badge this week. Try again next week.');
+  if (counts.pending >= SHARE_MAX_PENDING) throw new HttpError(429, `You have ${SHARE_MAX_PENDING} requests waiting already. Wait for an answer or for one to expire.`);
+  const id = newBadgeId();
+  await env.DB.prepare(
+    `INSERT INTO badge_shares (id, requester, owner, badge, badge_name, pair, pair_name, note, status, created, decided, posted)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', ?9, 0, 0)`
+  ).bind(id, me, owner, entry.id, entry.name, pairEntry?.id ?? null, pairEntry?.name ?? null, note, now).run();
+  return json(shareOut(await env.DB.prepare(`SELECT ${SHARE_COLUMNS} FROM badge_shares WHERE id = ?1`).bind(id).first()), 201);
+}
+
+async function shareRow(env, id) {
+  const r = await env.DB.prepare(`SELECT ${SHARE_COLUMNS} FROM badge_shares WHERE id = ?1`).bind(id).first();
+  if (!r) throw new HttpError(404, 'No such share request.');
+  return r;
+}
+
+async function listShares(env, req, url) {
+  await adminAllowed(env, req);
+  const pending = url.searchParams.get('pending') === '1';
+  const { results } = pending
+    ? await env.DB.prepare(`SELECT ${SHARE_COLUMNS} FROM badge_shares WHERE status = 'pending' AND posted = 0 AND created > ?1 ORDER BY created ASC LIMIT 25`).bind(Date.now() - SHARE_TTL_MS).all()
+    : await env.DB.prepare(`SELECT ${SHARE_COLUMNS} FROM badge_shares ORDER BY created DESC LIMIT 200`).all();
+  return json({ shares: results.map(shareOut) }, 200, { 'cache-control': 'no-store' });
+}
+
+async function editShareUsers(env, row, add) {
+  const ids = [row.badge, row.pair].filter(Boolean);
+  const u = row.requester;
+  return commitBadges(env, [], list => {
+    const found = list.filter(e => ids.includes(e.id));
+    if (add && found.length !== ids.length) throw new HttpError(404, "That badge isn't published anymore.");
+    const next = list.map(e => {
+      if (!ids.includes(e.id)) return e;
+      const shared = (e.shared || []).filter(x => x !== u);
+      const users = e.users.filter(x => x !== u || (!add && !(e.shared || []).includes(u)));
+      if (add) {
+        if (users.length >= MAX_BADGE_USERS) throw new HttpError(409, 'That badge has as many people as it can hold.');
+        users.push(u);
+        shared.push(u);
+      }
+      const out = { ...e, users };
+      if (shared.length) out.shared = shared;
+      else delete out.shared;
+      return out;
+    });
+    const names = found.map(e => `"${e.name}"`).join(' and ');
+    return { next, drop: [], message: add ? `Share ${names} with ${u}` : `Stop sharing ${names} with ${u}` };
+  });
+}
+
+async function shareImage(env, req, id, n) {
+  await adminAllowed(env, req);
+  const row = await shareRow(env, id);
+  const badgeId = n ? row.pair : row.badge;
+  if (!badgeId) throw new HttpError(404, 'No image.');
+  const pv = await env.DB.prepare('SELECT preview FROM badge_requests WHERE id = ?1').bind(badgeId).first();
+  if (pv?.preview) return new Response(new Uint8Array(pv.preview), { headers: { 'content-type': 'image/png', 'cache-control': 'private, no-store' } });
+  const { head, entries } = await readPublishedBadges(env);
+  const e = entries.find(x => x.id === badgeId);
+  if (!e?.image) throw new HttpError(404, 'No image.');
+  const res = await fetch(`https://raw.githubusercontent.com/${GH_REPO}/${head}/${BADGE_DIR}/${e.image}`);
+  if (!res.ok) throw new HttpError(404, 'No image.');
+  return new Response(res.body, { headers: { 'content-type': e.imageType || 'image/png', 'cache-control': 'private, no-store' } });
+}
+
+async function decideShare(env, ctx, req, id, b) {
+  feedAllowed(env, req);
+  const row = await shareRow(env, id);
+  if (b?.posted !== undefined) {
+    if (![0, 1, 2].includes(b.posted)) throw new HttpError(400, 'Send posted as 0, 1 or 2.');
+    await env.DB.prepare('UPDATE badge_shares SET posted = ?2 WHERE id = ?1').bind(id, b.posted).run();
+    if (b.status === undefined) return json(shareOut({ ...row, posted: b.posted }));
+  }
+  if (!['accepted', 'declined'].includes(b?.status)) throw new HttpError(400, 'Send accepted or declined.');
+  if (String(b.by ?? '') !== row.owner) throw new HttpError(403, 'Only the badge owner can answer this.');
+  const current = shareOut(row);
+  if (current.status !== 'pending') throw new HttpError(409, current.status === 'expired' ? 'This request expired.' : `This request was already ${current.status}.`);
+  if (b.status === 'accepted') {
+    try {
+      await editShareUsers(env, row, true);
+    } catch (e) {
+      if (e instanceof HttpError && e.status === 404) await env.DB.prepare("UPDATE badge_shares SET status = 'gone', decided = ?2 WHERE id = ?1").bind(id, Date.now()).run();
+      throw e;
+    }
+    ctx.waitUntil(caches.default.delete(PUBLISHED_KEY));
+  }
+  await env.DB.prepare('UPDATE badge_shares SET status = ?2, decided = ?3 WHERE id = ?1').bind(id, b.status, Date.now()).run();
+  return json(shareOut(await shareRow(env, id)));
+}
+
+async function revokeShare(env, ctx, row) {
+  if (row.status !== 'accepted') throw new HttpError(409, "That badge isn't shared right now.");
+  await editShareUsers(env, row, false);
+  ctx.waitUntil(caches.default.delete(PUBLISHED_KEY));
+  await env.DB.prepare("UPDATE badge_shares SET status = 'revoked', decided = ?2 WHERE id = ?1").bind(row.id, Date.now()).run();
+  return json(shareOut(await shareRow(env, row.id)));
+}
+
+async function revokeOwnShare(env, ctx, req, id) {
+  const me = await shareUser(env, req);
+  const row = await shareRow(env, id);
+  if (row.owner !== me) throw new HttpError(403, 'Only the badge owner can stop sharing it.');
+  return revokeShare(env, ctx, row);
+}
+
+async function adminRevokeShare(env, ctx, req, id) {
+  await adminAllowed(env, req, false);
+  return revokeShare(env, ctx, await shareRow(env, id));
+}
+
+async function setShareOptOut(env, req, b) {
+  feedAllowed(env, req);
+  const user = String(b?.user ?? '');
+  if (!SNOWFLAKE_RE.test(user) || typeof b.off !== 'boolean') throw new HttpError(400, 'Send the user and off as true or false.');
+  if (b.off) await env.DB.prepare('INSERT OR REPLACE INTO badge_share_optout (user_id, updated) VALUES (?1, ?2)').bind(user, Date.now()).run();
+  else await env.DB.prepare('DELETE FROM badge_share_optout WHERE user_id = ?1').bind(user).run();
+  return json({ user, off: b.off });
 }
 
 const bearer = req => (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
