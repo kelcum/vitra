@@ -41,6 +41,7 @@ const MAX_BADGE_USERS = 100;
 const SHARE_SESSION_MS = 30 * 86400000;
 const SHARE_TTL_MS = 7 * 86400000;
 const SHARE_MAX_PENDING = 3;
+const DIRECT_SHARES_PER_DAY = 10;
 const SHARE_ID_RE = /^[0-9a-f]{16}$/;
 
 const NOW_PLAYING_FRESH_MS = 90 * 1000;
@@ -98,6 +99,7 @@ async function route(req, env, ctx, url) {
   if (p === '/v1/badge-shares/session' && m === 'POST') return shareSession(env, await body(req, 8192));
   if (p === '/v1/badge-shares' && m === 'GET') return myShares(env, req);
   if (p === '/v1/badge-shares' && m === 'POST') return requestShare(env, req, await body(req, 8192));
+  if (p === '/v1/badge-shares/direct' && m === 'POST') return directShare(env, ctx, req, await body(req, 8192));
   if (p === '/v1/admin/badge-shares' && m === 'GET') return listShares(env, req, url);
   if (p === '/v1/admin/badge-share-optout' && m === 'POST') return setShareOptOut(env, req, await body(req, 8192));
   let r;
@@ -1045,6 +1047,7 @@ const shareOut = r => ({
   created: r.created,
   decided: r.decided || null,
   delivered: r.posted === 1,
+  direct: r.posted === 3,
 });
 
 async function shareUser(env, req) {
@@ -1108,6 +1111,39 @@ async function requestShare(env, req, b) {
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', ?9, 0, 0)`
   ).bind(id, me, owner, entry.id, entry.name, pairEntry?.id ?? null, pairEntry?.name ?? null, note, now).run();
   return json(shareOut(await env.DB.prepare(`SELECT ${SHARE_COLUMNS} FROM badge_shares WHERE id = ?1`).bind(id).first()), 201);
+}
+
+async function directShare(env, ctx, req, b) {
+  const me = await shareUser(env, req);
+  const to = String(b?.to ?? '');
+  const badgeId = String(b?.badge ?? '');
+  if (!SNOWFLAKE_RE.test(to) || !SHARE_ID_RE.test(badgeId)) throw new HttpError(400, 'Pick one of your badges and who to share it with.');
+  if (to === me) throw new HttpError(400, 'That badge is already yours.');
+  const { entries } = await readPublishedBadges(env);
+  const entry = entries.find(e => e.id === badgeId);
+  if (!entry) throw new HttpError(404, "That badge isn't around anymore.");
+  const owns = e => e.users.includes(me) && !(e.shared || []).includes(me);
+  if (!owns(entry)) throw new HttpError(403, "You can only share badges that are yours.");
+  if (entry.users.includes(to)) throw new HttpError(409, 'They already have this badge.');
+  const pairEntry = entry.request?.pair ? entries.find(e => e.id === entry.request.pair && owns(e)) : null;
+  const now = Date.now();
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM badge_shares WHERE owner = ?1 AND posted = 3 AND created > ?2').bind(me, now - 86400000).first();
+  if ((recent?.n || 0) >= DIRECT_SHARES_PER_DAY) throw new HttpError(429, `You've shared ${DIRECT_SHARES_PER_DAY} badges today already. Try again tomorrow.`);
+  const id = newBadgeId();
+  await env.DB.prepare(
+    `INSERT INTO badge_shares (id, requester, owner, badge, badge_name, pair, pair_name, note, status, created, decided, posted)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, '', 'pending', ?8, 0, 3)`
+  ).bind(id, to, me, entry.id, entry.name, pairEntry?.id ?? null, pairEntry?.name ?? null, now).run();
+  const row = await shareRow(env, id);
+  try {
+    await editShareUsers(env, row, true);
+  } catch (e) {
+    await env.DB.prepare('DELETE FROM badge_shares WHERE id = ?1').bind(id).run();
+    throw e;
+  }
+  ctx.waitUntil(caches.default.delete(PUBLISHED_KEY));
+  await env.DB.prepare("UPDATE badge_shares SET status = 'accepted', decided = ?2 WHERE id = ?1").bind(id, now).run();
+  return json(shareOut(await shareRow(env, id)), 201);
 }
 
 async function shareRow(env, id) {
