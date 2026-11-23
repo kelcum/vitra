@@ -1125,6 +1125,7 @@ async function directShare(env, ctx, req, b) {
   const owns = e => e.users.includes(me) && !(e.shared || []).includes(me);
   if (!owns(entry)) throw new HttpError(403, "You can only share badges that are yours.");
   if (entry.users.includes(to)) throw new HttpError(409, 'They already have this badge.');
+  if (await shareOptedOut(env, to)) throw new HttpError(403, "They've turned off badge sharing, so they can't be given badges.");
   const pairEntry = entry.request?.pair ? entries.find(e => e.id === entry.request.pair && owns(e)) : null;
   const now = Date.now();
   const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM badge_shares WHERE owner = ?1 AND posted = 3 AND created > ?2').bind(me, now - 86400000).first();
